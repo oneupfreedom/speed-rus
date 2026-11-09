@@ -18,69 +18,137 @@ export default function Home() {
 const [data, setData] = useState<StockSqueezeItem[]>([]);
 const [loading, setLoading] = useState<boolean>(true);
 const [error, setError] = useState<string | null>(null);
+const [searchTerm, setSearchTerm] = useState<string>('');
+const [lastSync, setLastSync] = useState<string>('');
+
+const fetchData = async () => {
+setLoading(true);
+try {
+const res = await fetch('/api/scanner');
+if (!res.ok) throw new Error('Failed to fetch stock scanner data');
+const jsonResponse = await res.json();
+
+const items = Array.isArray(jsonResponse)
+? jsonResponse
+: jsonResponse.data || jsonResponse.results || [];
+
+setData(items);
+setLastSync(new Date().toLocaleTimeString());
+setError(null);
+} catch (err: any) {
+setError(err.message);
+} finally {
+setLoading(false);
+}
+};
 
 useEffect(() => {
-fetch('/api/scanner')
-.then((res) => {
-if (!res.ok) throw new Error('Failed to fetch stock scanner data');
-return res.json();
-})
-.then((data) => {
-setData(Array.isArray(data) ? data : data.results || []);
-setLoading(false);
-})
-.catch((err) => {
-setError(err.message);
-setLoading(false);
-});
+fetchData();
 }, []);
 
+const filteredData = data.filter((item) =>
+item.ticker.toLowerCase().includes(searchTerm.toLowerCase()) ||
+(item.name && item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+);
+
 return (
-<main style={{ padding: '2rem', fontFamily: 'sans-serif', background: '#121212', color: '#fff', minHeight: '100vh' }}>
-<h1>Speed-Rus Penny Stock Squeeze Scanner</h1>
-<p style={{ color: '#888' }}>Live tracking: Low float, high short interest, and momentum spikes.</p>
+<main style={{ minHeight: '100vh', background: '#0b0f19', color: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', padding: '16px' }}>
+<div style={{ maxWidth: '600px', margin: '0 auto' }}>
 
-{loading && <p>Scanning market data...</p>}
-{error && <p style={{ color: '#ff5555' }}>Error: {error}</p>}
+{/* Header Card */}
+<div style={{ background: '#131b2e', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>
+<span>⚡</span> Live Market Scanner
+</div>
+<h1 style={{ fontSize: '22px', fontWeight: 'bold', margin: '0 0 8px 0' }}>Speedy Short-Squeeze Engine</h1>
+<p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px 0', lineHeight: '1.4' }}>
+Real-time tracking of high short interest, borrow fees, and float velocity for stocks.
+</p>
 
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+<span style={{ color: '#64748b', fontSize: '12px' }}>Last sync: {lastSync || 'Connecting...'}</span>
+<button
+onClick={fetchData}
+style={{ background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+>
+🔄 Refresh Feed
+</button>
+</div>
+</div>
+
+{/* Search Bar */}
+<div style={{ marginBottom: '16px' }}>
+<input
+type="text"
+placeholder="Search ticker or company name..."
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+style={{ width: '100%', background: '#131b2e', border: '1px solid #1e293b', borderRadius: '12px', padding: '14px 16px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+/>
+</div>
+
+{/* Watchlist Pill */}
+<div style={{ marginBottom: '20px', display: 'inline-block', background: '#131b2e', border: '1px solid #1e293b', borderRadius: '20px', padding: '8px 14px', fontSize: '12px', color: '#fbbf24' }}>
+🛡️ High Short Interest / High Reward Watchlist
+</div>
+
+{/* Status Messages */}
+{loading && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '20px' }}>Scanning market data...</p>}
+{error && <p style={{ textAlign: 'center', color: '#f87171', padding: '20px' }}>Error: {error}</p>}
+
+{/* Data List / Table View */}
 {!loading && !error && (
-<div style={{ marginTop: '2rem', overflowX: 'auto' }}>
-{data.length === 0 ? (
-<p>No active penny stock squeeze setups matching criteria.</p>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+{filteredData.length === 0 ? (
+<p style={{ textAlign: 'center', color: '#94a3b8', padding: '30px' }}>No active penny stock squeeze setups matching criteria.</p>
 ) : (
-<table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-<thead>
-<tr style={{ borderBottom: '1px solid #333', color: '#aaa' }}>
-<th style={{ padding: '10px' }}>Ticker</th>
-<th style={{ padding: '10px' }}>Price</th>
-<th style={{ padding: '10px' }}>Change</th>
-<th style={{ padding: '10px' }}>Short Int %</th>
-<th style={{ padding: '10px' }}>Float</th>
-<th style={{ padding: '10px' }}>CTB %</th>
-<th style={{ padding: '10px' }}>RVOL</th>
-</tr>
-</thead>
-<tbody>
-{data.map((item, index) => (
-<tr key={index} style={{ borderBottom: '1px solid #222' }}>
-<td style={{ padding: '10px', fontWeight: 'bold', color: '#00bcd4' }}>{item.ticker}</td>
-<td style={{ padding: '10px' }}>${item.price?.toFixed(2) ?? 'N/A'}</td>
-<td style={{ padding: '10px', color: (item.change ?? 0) >= 0 ? '#4caf50' : '#f44336' }}>
-{item.change ? `${item.change}%` : 'N/A'}
-</td>
-<td style={{ padding: '10px', fontWeight: 'bold', color: '#ff9800' }}>
+filteredData.map((item, index) => (
+<div key={index} style={{ background: '#131b2e', border: '1px solid #1e293b', borderRadius: '14px', padding: '16px', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 0.8fr', alignItems: 'center', gap: '8px' }}>
+
+{/* Ticker / Company */}
+<div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+<span style={{ fontWeight: 'bold', fontSize: '16px', color: '#ffffff' }}>{item.ticker}</span>
+<span style={{ background: '#1e293b', color: '#94a3b8', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>US</span>
+</div>
+<div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+{item.name || 'Penny Stock'}
+</div>
+</div>
+
+{/* Price / Change */}
+<div>
+<div style={{ fontWeight: 'bold', fontSize: '15px', color: '#ffffff' }}>
+${item.price?.toFixed(2) ?? '0.00'}
+</div>
+<div style={{ fontSize: '12px', fontWeight: 'bold', color: (item.change ?? 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+{(item.change ?? 0) >= 0 ? '+' : ''}{item.change}%
+</div>
+</div>
+
+{/* Short Interest */}
+<div>
+<div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase' }}>Short Int</div>
+<div style={{ fontWeight: 'bold', fontSize: '14px', color: '#fbbf24', marginTop: '2px' }}>
 {item.shortInterest ? `${item.shortInterest}%` : 'N/A'}
-</td>
-<td style={{ padding: '10px' }}>{item.float ?? 'N/A'}</td>
-<td style={{ padding: '10px' }}>{item.ctb ? `${item.ctb}%` : 'N/A'}</td>
-<td style={{ padding: '10px' }}>{item.rvol ? `${item.rvol}x` : 'N/A'}</td>
-</tr>
-))}
-</tbody>
-</table>
+</div>
+</div>
+
+{/* Squeeze Score / CTB */}
+<div style={{ textAlign: 'right' }}>
+<div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase' }}>Score</div>
+<div style={{ fontWeight: 'bold', fontSize: '14px', color: '#38bdf8', marginTop: '2px' }}>
+{item.squeezeScore ? `${item.squeezeScore}` : 'N/A'}
+</div>
+</div>
+
+</div>
+))
 )}
 </div>
 )}
+
+</div>
 </main>
 );
 }
