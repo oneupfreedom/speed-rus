@@ -1,68 +1,91 @@
-import { NextResponse } from 'next/server';
+'use client';
 
-export async function GET() {
-const apiKey = process.env.POLYGON_API_KEY;
+import { useState, useEffect } from 'react';
 
-if (!apiKey) {
-return NextResponse.json(
-{ error: 'POLYGON_API_KEY environment variable is not configured.' },
-{ status: 500 }
-);
+interface StockSqueezeItem {
+ticker: string;
+name?: string;
+price?: number;
+change?: number;
+shortInterest?: number;
+float?: string;
+ctb?: number;
+rvol?: number;
+squeezeScore?: number;
 }
 
-try {
-const snapshotRes = await fetch(
-`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?apiKey=${apiKey}`,
-{ next: { revalidate: 60 } }
-);
+export default function Home() {
+const [data, setData] = useState<StockSqueezeItem[]>([]);
+const [loading, setLoading] = useState<boolean>(true);
+const [error, setError] = useState<string | null>(null);
 
-if (!snapshotRes.ok) {
-throw new Error(`Polygon API error: ${snapshotRes.statusText}`);
-}
-
-const snapshotData = await snapshotRes.json();
-const tickers = snapshotData.tickers || [];
-
-// Relaxed filter for weekend/after-hours testing
-let squeezeCandidates = tickers
-.filter((t: any) => {
-const price = t.day?.c || t.min?.c || t.prevDay?.c || 0;
-return price > 0 && price <= 15.0; // Captures penny stocks up to $15
+useEffect(() => {
+fetch('/api/scanner')
+.then((res) => {
+if (!res.ok) throw new Error('Failed to fetch stock scanner data');
+return res.json();
 })
-.slice(0, 10)
-.map((t: any) => {
-const price = t.day?.c || t.min?.c || t.prevDay?.c || 0;
-const changePercent = t.todaysChangePerc || 2.5;
-return {
-ticker: t.ticker,
-price: price,
-change: parseFloat(changePercent.toFixed(2)),
-shortInterest: 22.4,
-float: '8.5M',
-ctb: 35.2,
-rvol: 3.4,
-squeezeScore: 88,
-};
-});
+.then((jsonResponse) => {
+// Correctly extract the data array from the API response object
+const items = Array.isArray(jsonResponse)
+? jsonResponse
+: jsonResponse.data || jsonResponse.results || [];
 
-// Fallback mock data if market snapshot returns empty on weekends
-if (squeezeCandidates.length === 0) {
-squeezeCandidates = [
-{ ticker: 'TEST1', price: 2.45, change: 18.5, shortInterest: 28.1, float: '4.2M', ctb: 45.0, rvol: 4.8, squeezeScore: 94 },
-{ ticker: 'TEST2', price: 1.85, change: 12.3, shortInterest: 31.4, float: '6.1M', ctb: 52.5, rvol: 3.9, squeezeScore: 91 },
-];
-}
-
-return NextResponse.json({
-success: true,
-timestamp: new Date().toISOString(),
-count: squeezeCandidates.length,
-data: squeezeCandidates,
+setData(items);
+setLoading(false);
+})
+.catch((err) => {
+setError(err.message);
+setLoading(false);
 });
-} catch (error: any) {
-return NextResponse.json(
-{ error: error.message || 'Failed to fetch squeeze scanner data' },
-{ status: 500 }
+}, []);
+
+return (
+<main style={{ padding: '2rem', fontFamily: 'sans-serif', background: '#121212', color: '#fff', minHeight: '100vh' }}>
+<h1>Speed-Rus Penny Stock Squeeze Scanner</h1>
+<p style={{ color: '#888' }}>Live tracking: Low float, high short interest, and momentum spikes.</p>
+
+{loading && <p>Scanning market data...</p>}
+{error && <p style={{ color: '#ff5555' }}>Error: {error}</p>}
+
+{!loading && !error && (
+<div style={{ marginTop: '2rem', overflowX: 'auto' }}>
+{data.length === 0 ? (
+<p>No active penny stock squeeze setups matching criteria.</p>
+) : (
+<table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+<thead>
+<tr style={{ borderBottom: '1px solid #333', color: '#aaa' }}>
+<th style={{ padding: '10px' }}>Ticker</th>
+<th style={{ padding: '10px' }}>Price</th>
+<th style={{ padding: '10px' }}>Change</th>
+<th style={{ padding: '10px' }}>Short Int %</th>
+<th style={{ padding: '10px' }}>Float</th>
+<th style={{ padding: '10px' }}>CTB %</th>
+<th style={{ padding: '10px' }}>RVOL</th>
+</tr>
+</thead>
+<tbody>
+{data.map((item, index) => (
+<tr key={index} style={{ borderBottom: '1px solid #222' }}>
+<td style={{ padding: '10px', fontWeight: 'bold', color: '#00bcd4' }}>{item.ticker}</td>
+<td style={{ padding: '10px' }}>${item.price?.toFixed(2) ?? 'N/A'}</td>
+<td style={{ padding: '10px', color: (item.change ?? 0) >= 0 ? '#4caf50' : '#f44336' }}>
+{item.change ? `${item.change}%` : 'N/A'}
+</td>
+<td style={{ padding: '10px', fontWeight: 'bold', color: '#ff9800' }}>
+{item.shortInterest ? `${item.shortInterest}%` : 'N/A'}
+</td>
+<td style={{ padding: '10px' }}>{item.float ?? 'N/A'}</td>
+<td style={{ padding: '10px' }}>{item.ctb ? `${item.ctb}%` : 'N/A'}</td>
+<td style={{ padding: '10px' }}>{item.rvol ? `${item.rvol}x` : 'N/A'}</td>
+</tr>
+))}
+</tbody>
+</table>
+)}
+</div>
+)}
+</main>
 );
-}
 }
