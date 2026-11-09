@@ -96,7 +96,7 @@ style={{ width: '100%', background: '#131b2e', border: '1px solid #1e293b', bord
 {loading && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '20px' }}>Scanning market data...</p>}
 {error && <p style={{ textAlign: 'center', color: '#f87171', padding: '20px' }}>Error: {error}</p>}
 
-{/* Data List / Table View */}
+{/* Data List View */}
 {!loading && !error && (
 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 {filteredData.length === 0 ? (
@@ -118,37 +118,4 @@ filteredData.map((item, index) => (
 
 {/* Price / Change */}
 <div>
-<div style={{ fontWeight: 'bold', fontSize: '15px', color: '#ffffff' }}>
-${item.price?.toFixed(2) ?? '0.00'}
-</div>
-<div style={{ fontSize: '12px', fontWeight: 'bold', color: (item.change ?? 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
-{(item.change ?? 0) >= 0 ? '+' : ''}{item.change}%
-</div>
-</div>
-
-{/* Short Interest */}
-<div>
-<div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase' }}>Short Int</div>
-<div style={{ fontWeight: 'bold', fontSize: '14px', color: '#fbbf24', marginTop: '2px' }}>
-{item.shortInterest ? `${item.shortInterest}%` : 'N/A'}
-</div>
-</div>
-
-{/* Squeeze Score / CTB */}
-<div style={{ textAlign: 'right' }}>
-<div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase' }}>Score</div>
-<div style={{ fontWeight: 'bold', fontSize: '14px', color: '#38bdf8', marginTop: '2px' }}>
-{item.squeezeScore ? `${item.squeezeScore}` : 'N/A'}
-</div>
-</div>
-
-</div>
-))
-)}
-</div>
-)}
-
-</div>
-</main>
-);
-}
+<div style={{ fontWeight: 'bold
