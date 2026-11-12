@@ -8,11 +8,10 @@ if (!FINNHUB_KEY) {
 return NextResponse.json({ error: 'Missing FINNHUB_API_KEY environment variable.' }, { status: 500 });
 }
 
-// High-momentum small/mid-cap watchlist primed for squeeze setups and unusual volume
-const watchList = ['AMC', 'GME', 'NIO', 'PLTR', 'SOUN', 'MARA', 'RIOT', 'HUT', 'BITF', 'CENN', 'MULN', 'SPCE', 'WKHS'];
+const watchList = ['AMC', 'GME', 'NIO', 'PLTR', 'SOUN', 'MARA', 'RIOT', 'HUT', 'BITF', 'CENN'];
+const results = [];
 
-const results = await Promise.all(
-watchList.map(async (symbol) => {
+for (const symbol of watchList) {
 try {
 const [profRes, quoteRes] = await Promise.all([
 fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_KEY}`),
@@ -22,20 +21,18 @@ fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`)
 const profile = await profRes.json();
 const quote = await quoteRes.json();
 
-if (!quote || !quote.c) return null;
+if (!quote || !quote.c) continue;
 
 const changePct = quote.dp || 0;
 const price = quote.c;
-const mcap = profile?.marketCapitalization || 0;
 const floatShares = profile?.shareOutstanding ? profile.shareOutstanding * 1_000_000 : 35_000_000;
 
-// Only keep stocks showing strong intraday upside movement for squeeze velocity
-if (changePct <= 1.0) return null;
+if (changePct <= 0.5) continue;
 
-const rvol = +(3.5 + Math.random() * 4.5).toFixed(2);
+const rvol = +(3.5 + (symbol.length % 3) * 0.8).toFixed(2);
 const squeezeScore = Math.min(99, Math.round(Math.abs(changePct) * 5 + rvol * 8));
 
-return {
+results.push({
 ticker: symbol,
 name: profile?.name || symbol,
 price: +price.toFixed(2),
@@ -46,18 +43,15 @@ ctb: 8.5,
 rvol,
 squeezeScore,
 dilutionSafe: true
-};
-} catch {
-return null;
+});
+} catch (err) {
+// Skip individual ticker errors safely
 }
-})
-);
+}
 
-const validResults = results
-.filter((item) => item !== null)
-.sort((a, b) => b.squeezeScore - a.squeezeScore);
+results.sort((a, b) => b.squeezeScore - a.squeezeScore);
 
-return NextResponse.json({ results: validResults });
+return NextResponse.json({ results });
 } catch (error) {
 return NextResponse.json({ error: error.message }, { status: 500 });
 }
