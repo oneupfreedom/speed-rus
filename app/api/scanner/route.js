@@ -4,27 +4,48 @@ const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
 
 export async function GET() {
 try {
-// 1. Pull live top US gainers from Yahoo Finance
-const yfRes = await fetch(
+// Pull from both Day Gainers and Most Actives so early-market movers always populate
+const urls = [
 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=day_gainers&count=25',
-{ headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 30 } }
-);
-const yfData = await yfRes.json();
-const rawQuotes = yfData?.finance?.result?.[0]?.quotes || [];
+'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=most_actives&count=25'
+];
 
-// 2. Filter for small-cap momentum candidates ($1 - $25, MCAP < $250M)
+const responses = await Promise.all(
+urls.map((url) =>
+fetch(url, {
+headers: { 'User-Agent': 'Mozilla/5.0' },
+cache: 'no-store'
+}).then((r) => (r.ok ? r.json() : null))
+)
+);
+
+// Combine and deduplicate tickers
+const seen = new Set();
+const rawQuotes = [];
+for (const data of responses) {
+const quotes = data?.finance?.result?.[0]?.quotes || [];
+for (const q of quotes) {
+if (q?.symbol && !seen.has(q.symbol)) {
+seen.add(q.symbol);
+rawQuotes.push(q);
+}
+}
+}
+
+// Filter for small/mid-cap momentum ($1 - $35, MCAP < $1B, Volume > 50K for early bell)
 const candidates = rawQuotes
 .filter(
 (q) =>
 q.regularMarketPrice >= 1 &&
-q.regularMarketPrice <= 25 &&
+q.regularMarketPrice <= 35 &&
 (q.marketCap || 0) > 5_000_000 &&
-(q.marketCap || 0) < 250_000_000 &&
-q.regularMarketVolume > 300_000
+(q.marketCap || 0) < 1_000_000_000 &&
+(q.regularMarketVolume || 0) > 50_000 &&
+(q.regularMarketChangePercent || 0) >= 3
 )
-.slice(0, 10);
+.slice(0, 12);
 
-// 3. Audit via Finnhub & map directly to your StockSqueezeItem interface
+// Audit via Finnhub & map to UI
 const results = await Promise.all(
 candidates.map(async (stock) => {
 const symbol = stock.symbol;
@@ -32,6 +53,7 @@ let floatShares = stock.sharesOutstanding || null;
 let dilutionWarning = false;
 
 if (FINNHUB_KEY) {
+try {
 const [profRes, filRes] = await Promise.all([
 fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_KEY}`),
 fetch(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${FINNHUB_KEY}`)
@@ -51,6 +73,9 @@ filings.some(
 (f) =>
 new Date(f.filedDate).getTime() >= cutoff && toxicForms.includes(f.form)
 );
+} catch {
+// Non-blocking fallback if Finnhub rate-limits
+}
 }
 
 const rvol = stock.averageDailyVolume3Month
@@ -77,7 +102,7 @@ dilutionSafe: !dilutionWarning
 
 const cleanResults = results
 .filter((item) => item.dilutionSafe)
-.sort((a, b) => b.rvol - a.rvol);
+.sort((a, b) => b.change - a.change);
 
 return NextResponse.json({ results: cleanResults });
 } catch (error) {
