@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -8,6 +9,7 @@ return NextResponse.json({ success: false, error: 'API Key missing on Vercel' },
 }
 
 try {
+// Using the active v3 stock market gainers endpoint
 const res = await fetch(`https://financialmodelingprep.com/api/v3/stock_market/gainers?apikey=${apiKey}`);
 const gainers = await res.json();
 
@@ -16,7 +18,6 @@ const errorMsg = gainers["Error Message"] || gainers.message || "Invalid API res
 return NextResponse.json({ success: false, error: errorMsg }, { status: 200 });
 }
 
-// RELAXED FILTERS FOR TESTING: Accepts any price and negative/flat/positive changes to force results
 const processed = gainers.map((stock) => {
 const price = stock.price || 0;
 const change = stock.changesPercentage || stock.changePercentage || 0;
@@ -37,26 +38,3 @@ return {
 symbol: stock.symbol || 'UNKNOWN',
 name: stock.name || stock.symbol || 'Unknown Company',
 price: price,
-change: change,
-volume: volume,
-avgVolume: avgVolume,
-relVolume: Number(relVolume.toFixed(2)),
-score: score,
-classification: classification
-};
-})
-.filter(stock => stock.price > 0.01) // Super wide price filter just to see data
-.sort((a, b) => b.score - a.score)
-.slice(0, 25);
-
-return NextResponse.json({
-success: true,
-data: processed,
-count: processed.length,
-timestamp: new Date().toISOString()
-});
-
-} catch (err) {
-return NextResponse.json({ success: false, error: err.message }, { status: 200 });
-}
-}
