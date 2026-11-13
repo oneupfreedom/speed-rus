@@ -95,11 +95,11 @@ className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 text
 <tbody className="divide-y divide-slate-800 text-sm">
 {loading && data.length === 0 ? (
 <tr>
-<td colSpan="6" className="p-8 text-center text-slate-500">Scanning market feeds...</td>
+<td colSpan={6} className="p-8 text-center text-slate-500">Scanning market feeds...</td>
 </tr>
 ) : filteredData.length === 0 ? (
 <tr>
-<td colSpan="6" className="p-8 text-center text-slate-500">No active setups matching criteria right now.</td>
+<td colSpan={6} className="p-8 text-center text-slate-500">No active setups matching criteria right now.</td>
 </tr>
 ) : (
 filteredData.map((stock) => (
