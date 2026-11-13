@@ -113,7 +113,7 @@ filteredSetups.map((stock, index) => (
 ))
 ) : (
 <tr>
-<td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+<td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
 {loading ? 'Fetching active live setups...' : 'No active setups matching criteria right now.'}
 </td>
 </tr>
