@@ -25,24 +25,23 @@ marketMode = 'LIVE MARKET';
 marketMode = 'AFTER-HOURS';
 }
 
-// 1. Pull market-wide most active (highest volume) stocks across NYSE & NASDAQ
-const activeRes = await fetch(
-`https://financialmodelingprep.com/stable/most-actives?apikey=${fmpApiKey}`,
+// Pull market-wide top gainers instead of just most-actives (megacaps)
+const gainerRes = await fetch(
+`https://financialmodelingprep.com/stable/biggest-gainers?apikey=${fmpApiKey}`,
 { cache: 'no-store' }
 );
-const activeData = await activeRes.json();
+const gainerData = await gainerRes.json();
 
 let matchedSetups = [];
 
-if (Array.isArray(activeData)) {
-for (const stock of activeData) {
+if (Array.isArray(gainerData)) {
+for (const stock of gainerData) {
 const price = stock.price || 0;
 const changesPercentage = stock.changesPercentage || 0;
 
-// Filter criteria: Price >= $1.00, Change between +1.0% and +12.0% (widen window to catch early ignition)
+// Filter criteria: Price >= $1.00, Change between +1.0% and +12.0%
 if (price >= 1.00 && changesPercentage >= 1.0 && changesPercentage <= 12.0) {
 
-// Calculate a basic Squeeze Score based on relative movement
 let score = Math.round(changesPercentage * 8 + (stock.volume ? Math.log10(stock.volume) * 2 : 10));
 
 matchedSetups.push({
