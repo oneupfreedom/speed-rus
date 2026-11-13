@@ -11,10 +11,12 @@ return NextResponse.json(
 );
 }
 
-// Determine Market Mode (EST timezone awareness)
+// Determine Market Mode
 const now = new Date();
 const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-const timeNum = estTime.getHours() * 100 + estTime.getMinutes();
+const estHour = estTime.getHours();
+const estMin = estTime.getMinutes();
+const timeNum = estHour * 100 + estMin;
 
 let marketMode = 'PRE-MARKET';
 if (timeNum >= 930 && timeNum < 1600) {
@@ -23,83 +25,53 @@ marketMode = 'LIVE MARKET';
 marketMode = 'AFTER-HOURS';
 }
 
-// 1. Pull market-wide Most Active (highest volume) stocks across NYSE & NASDAQ
+// 1. Pull market-wide most active (highest volume) stocks across NYSE & NASDAQ
 const activeRes = await fetch(
 `https://financialmodelingprep.com/stable/most-actives?apikey=${fmpApiKey}`,
 { cache: 'no-store' }
 );
 const activeData = await activeRes.json();
 
-if (!Array.isArray(activeData)) {
-return NextResponse.json(
-{ error: 'Unexpected response from FMP most-actives endpoint', details: activeData },
-{ status: 502 }
-);
-}
+let matchedSetups = [];
 
-// 2. Filter for early-stage movers (+1.5% to +8%) with real liquidity
-const setups = activeData
-.filter((stock) => {
-const price = Number(stock.price) || 0;
-const pct = Number(stock.changesPercentage) || 0;
-const vol = Number(stock.volume) || 0;
-return price >= 1.0 && pct >= 1.5 && pct <= 8.0 && vol >= 500000;
-})
-.slice(0, 25)
-.map((stock) => {
-const currentPrice = Number(stock.price) || 0;
-const gapPercent = Number((stock.changesPercentage || 0).toFixed(2));
-const highPrice = Number(stock.dayHigh) || currentPrice;
-const lowPrice = Number(stock.dayLow) || currentPrice;
-const volume = Number(stock.volume) || 0;
-const avgVolume = Number(stock.avgVolume) || volume;
+if (Array.isArray(activeData)) {
+for (const stock of activeData) {
+const price = stock.price || 0;
+const changesPercentage = stock.changesPercentage || 0;
 
-// Calculate Relative Volume (RVOL) ratio
-const rvol = avgVolume > 0 ? Number((volume / avgVolume).toFixed(2)) : 1.0;
+// Filter criteria: Price >= $1.00, Change between +1.0% and +12.0% (widen window to catch early ignition)
+if (price >= 1.00 && changesPercentage >= 1.0 && changesPercentage <= 12.0) {
 
-// Intraday range position (0-100%)
-const rangePosition =
-highPrice > lowPrice
-? Math.round(((currentPrice - lowPrice) / (highPrice - lowPrice)) * 100)
-: 80;
+// Calculate a basic Squeeze Score based on relative movement
+let score = Math.round(changesPercentage * 8 + (stock.volume ? Math.log10(stock.volume) * 2 : 10));
 
-// Early Ignition Score: prioritizes RVOL spikes + tight high-of-day pressure
-const rvolPoints = Math.min(rvol * 15, 45); // Up to 45 pts for 3x+ volume
-const rangePoints = rangePosition * 0.35; // Up to 35 pts for holding highs
-const earlyMovePoints = Math.min(gapPercent * 2.5, 20); // Up to 20 pts for +2% to +8% build
-
-const squeezeScore = Math.min(
-100,
-Math.max(10, Math.round(rvolPoints + rangePoints + earlyMovePoints))
-);
-
-return {
-symbol: stock.symbol,
-name: `${stock.name || stock.symbol} (${rvol}x Vol)`,
-price: currentPrice.toFixed(2),
-gapPercent,
-rangePosition,
-squeezeScore,
-verdict: squeezeScore >= 75 ? 'EARLY IGNITION / BREAKOUT' : 'BUILDING PRESSURE',
-};
+matchedSetups.push({
+ticker: stock.symbol,
+company: stock.companyName || stock.symbol,
+price: price,
+change: changesPercentage,
+volume: stock.volume || 0,
+score: score,
+verdict: changesPercentage >= 4.0 ? 'EARLY IGNITION' : 'DEVELOPING SETUP'
 });
-
-// 3. Sort highest Early Ignition Score to the #1 spot
-setups.sort((a, b) => b.squeezeScore - a.squeezeScore);
-
-const topContender = setups.length > 0 ? setups[0] : null;
-if (topContender) {
-topContender.topContender = true;
 }
+}
+}
+
+// Sort by highest score/momentum
+matchedSetups.sort((a, b) => b.score - a.score);
 
 return NextResponse.json({
-marketMode,
-topContender,
-allSetups: setups,
-timestamp: new Date().toISOString(),
+success: true,
+marketMode: marketMode,
+count: matchedSetups.length,
+data: matchedSetups
 });
+
 } catch (error) {
-console.error('Early Ignition Scanner Error:', error);
-return NextResponse.json({ error: 'Failed to scan early setups' }, { status: 500 });
+return NextResponse.json(
+{ success: false, error: error.message },
+{ status: 500 }
+);
 }
 }
