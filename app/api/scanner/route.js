@@ -9,8 +9,8 @@ return NextResponse.json({ success: false, error: 'API Key missing on Vercel' },
 }
 
 try {
-// Using the active v3 stock market gainers endpoint
-const res = await fetch(`https://financialmodelingprep.com/api/v3/stock_market/gainers?apikey=${apiKey}`);
+// Using the current active FMP stable endpoint
+const res = await fetch(`https://financialmodelingprep.com/stable/biggest-gainers?apikey=${apiKey}`);
 const gainers = await res.json();
 
 if (!Array.isArray(gainers)) {
@@ -20,7 +20,7 @@ return NextResponse.json({ success: false, error: errorMsg }, { status: 200 });
 
 const processed = gainers.map((stock) => {
 const price = stock.price || 0;
-const change = stock.changesPercentage || stock.changePercentage || 0;
+const change = stock.changesPercentage || stock.changePercentage || stock.change || 0;
 const volume = stock.volume || 0;
 const avgVolume = stock.avgVolume || volume || 1;
 
