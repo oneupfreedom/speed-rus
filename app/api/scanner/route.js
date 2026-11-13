@@ -4,7 +4,7 @@ export async function GET() {
 const apiKey = process.env.FMP_API_KEY;
 
 if (!apiKey) {
-return NextResponse.json({ success: false, error: 'API Key missing on Vercel' }, { status: 500 });
+return NextResponse.json({ success: false, error: 'API Key missing on Vercel' }, { status: 200 });
 }
 
 try {
@@ -16,6 +16,7 @@ const errorMsg = gainers["Error Message"] || gainers.message || "Invalid API res
 return NextResponse.json({ success: false, error: errorMsg }, { status: 200 });
 }
 
+// RELAXED FILTERS FOR TESTING: Accepts any price and negative/flat/positive changes to force results
 const processed = gainers.map((stock) => {
 const price = stock.price || 0;
 const change = stock.changesPercentage || stock.changePercentage || 0;
@@ -25,42 +26,37 @@ const avgVolume = stock.avgVolume || volume || 1;
 const relVolume = avgVolume > 0 ? (volume / avgVolume) : 1;
 
 let score = 50;
-if (change >= 0.5 && change <= 50) score += 25;
-if (relVolume > 1.1) score += 20;
-if (price > 0.1 && price < 200) score += 5;
+if (change >= -50 && change <= 100) score += 25;
+if (price > 0.01 && price < 1000) score += 25;
 
-if (score > 100) score = 100;
-
-let verdict = 'WATCHING';
-if (change >= 2 && relVolume > 1.0) {
-verdict = 'EARLY IGNITION';
-} else if (change >= 6) {
-verdict = 'BREAKOUT RUN';
-} else {
-verdict = 'BUILDING BASE';
-}
+let classification = "BUILDING BASE";
+if (score >= 80) classification = "EARLY IGNITION";
+else if (score >= 65) classification = "BREAKOUT RUN";
 
 return {
-ticker: stock.symbol || 'N/A',
-company: stock.name || stock.symbol || 'N/A',
+symbol: stock.symbol || 'UNKNOWN',
+name: stock.name || stock.symbol || 'Unknown Company',
 price: price,
 change: change,
 volume: volume,
+avgVolume: avgVolume,
+relVolume: Number(relVolume.toFixed(2)),
 score: score,
-verdict: verdict
+classification: classification
 };
-});
-
-processed.sort((a, b) => b.score - a.score);
+})
+.filter(stock => stock.price > 0.01) // Super wide price filter just to see data
+.sort((a, b) => b.score - a.score)
+.slice(0, 25);
 
 return NextResponse.json({
 success: true,
-marketMode: 'EARLY IGNITION',
-data: processed.slice(0, 25)
+data: processed,
+count: processed.length,
+timestamp: new Date().toISOString()
 });
 
-} catch (error) {
-console.error('Scanner API Error:', error);
-return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+} catch (err) {
+return NextResponse.json({ success: false, error: err.message }, { status: 200 });
 }
 }
