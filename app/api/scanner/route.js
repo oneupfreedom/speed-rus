@@ -1,57 +1,63 @@
 import { NextResponse } from 'next/server';
 
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
+const fmpKey = process.env.STOCK_API_KEY;
+const finnhubKey = process.env.FINNHUB_API_KEY;
+
+if (!fmpKey || !finnhubKey) {
+return NextResponse.json(
+{ error: 'Missing STOCK_API_KEY or FINNHUB_API_KEY in Vercel environment variables.' },
+{ status: 500 }
+);
+}
+
 try {
-// High-beta watchlist optimized for morning momentum
-const watchList = ['WULF', 'SOUN', 'GME', 'AMC', 'PLTR', 'MARA', 'RIOT', 'HUT'];
+// 1. Whole-Market Discovery: Fetch today's top gainers across the market
+const gainersRes = await fetch(
+`https://financialmodelingprep.com/stable/biggest-gainers?apikey=${fmpKey}`,
+{ cache: 'no-store' }
+);
+const marketGainers = await gainersRes.json();
 
-const shortInterestMap = {
-WULF: '33.5%',
-SOUN: '24.5%',
-GME: '22.4%',
-AMC: '19.1%',
-MARA: '21.8%',
-RIOT: '18.9%',
-PLTR: '6.4%',
-HUT: '15.2%'
-};
+if (!Array.isArray(marketGainers)) {
+return NextResponse.json({ error: 'Invalid response from market screener', raw: marketGainers }, { status: 502 });
+}
 
+// 2. Filter for actionable stocks ($1.00+ price, +3.0% minimum momentum)
+const candidates = marketGainers
+.filter((item) => item.price >= 1.0 && (item.changesPercentage || item.change) >= 3.0)
+.slice(0, 12);
+
+// 3. Enrich & score each fresh candidate using live quotes
 const results = await Promise.all(
-watchList.map(async (symbol) => {
+candidates.map(async (stock) => {
 try {
-if (!FINNHUB_KEY) throw new Error('No API Key');
-
 const quoteRes = await fetch(
-`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`,
+`https://finnhub.io/api/v1/quote?symbol=${stock.symbol}&token=${finnhubKey}`,
 { cache: 'no-store' }
 );
 const quote = await quoteRes.json();
 
-if (!quote || typeof quote.c !== 'number' || quote.c <= 0) return null;
+const currentPrice = quote.c || stock.price;
+const changePct = stock.changesPercentage || stock.change || 0;
+const prevClose = quote.pc || (currentPrice / (1 + changePct / 100));
+const gapPercent = prevClose > 0 ? ((currentPrice - prevClose) / prevClose) * 100 : changePct;
 
-const currentPrice = quote.c;
-const previousClose = quote.pc || currentPrice;
+const dayHigh = quote.h || currentPrice;
+const dayLow = quote.l || currentPrice;
+const rangePosition = dayHigh > dayLow ? ((currentPrice - dayLow) / (dayHigh - dayLow)) * 100 : 100;
 
-// Calculate percentage gap change
-const gapPercent = previousClose
-? +(((currentPrice - previousClose) / previousClose) * 100).toFixed(2)
-: (quote.dp || 0);
-
-// Custom RVOL & Squeeze Score calculation engine
-const rvol = +(2.5 + Math.abs(gapPercent) * 0.45).toFixed(2);
-const squeezeScore = Math.min(99, Math.round(Math.abs(gapPercent) * 6 + rvol * 7));
+const squeezeScore = Number((gapPercent * (rangePosition / 100)).toFixed(2));
 
 return {
-ticker: symbol,
-name: symbol,
-price: +currentPrice.toFixed(2),
-change: gapPercent,
-shortInterest: shortInterestMap[symbol] || '15.0%',
-rvol: `${rvol}x`,
+symbol: stock.symbol,
+name: stock.name || stock.symbol,
+price: Number(currentPrice.toFixed(2)),
+gapPercent: Number(gapPercent.toFixed(2)),
+rangePosition: Math.round(rangePosition),
 squeezeScore,
-dilutionSafe: true
 };
 } catch {
 return null;
@@ -59,13 +65,13 @@ return null;
 })
 );
 
-// Behind-the-scenes filters: block anything under +3.0% and sort highest Squeeze Score first
-const validResults = results
-.filter((item) => item !== null && item.change >= 3.0)
+// 4. Sort so the #1 highest-scoring market mover is at the top
+const rankedSetups = results
+.filter((item) => item !== null && item.gapPercent >= 3.0)
 .sort((a, b) => b.squeezeScore - a.squeezeScore);
 
-return NextResponse.json(validResults, { status: 200 });
+return NextResponse.json(rankedSetups);
 } catch (error) {
-return NextResponse.json({ error: error.message }, { status: 500 });
+return NextResponse.json({ error: 'Scanner execution failed', details: error.message }, { status: 500 });
 }
 }
