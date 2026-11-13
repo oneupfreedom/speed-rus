@@ -32,7 +32,7 @@ setError(null);
 } else {
 setError(json.error || 'Failed to fetch scanner data');
 }
-} catch (err) {
+} catch (err: unknown) {
 const message = err instanceof Error ? err.message : 'An unexpected error occurred';
 setError(message);
 } finally {
