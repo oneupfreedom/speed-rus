@@ -14,7 +14,7 @@ return NextResponse.json(
 }
 
 try {
-// 1. Whole-Market Discovery: Fetch today's top gainers across the market
+// 1. Fetch top market gainers
 const gainersRes = await fetch(
 `https://financialmodelingprep.com/stable/biggest-gainers?apikey=${fmpKey}`,
 { cache: 'no-store' }
@@ -28,9 +28,16 @@ return NextResponse.json({ error: 'Invalid response from market screener', raw: 
 // 2. Filter for actionable stocks ($1.00+ price, +3.0% minimum momentum)
 const candidates = marketGainers
 .filter((item) => item.price >= 1.0 && (item.changesPercentage || item.change) >= 3.0)
-.slice(0, 12);
+.slice(0, 15);
 
-// 3. Enrich & score each fresh candidate using live quotes
+// Determine if regular market hours have started (9:30 AM EST)
+const now = new Date();
+const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+const hours = estTime.getHours();
+const minutes = estTime.getMinutes();
+const isMarketOpen = hours > 9 || (hours === 9 && minutes >= 30);
+
+// 3. Enrich & score candidates with market-hours weighting
 const results = await Promise.all(
 candidates.map(async (stock) => {
 try {
@@ -49,7 +56,9 @@ const dayHigh = quote.h || currentPrice;
 const dayLow = quote.l || currentPrice;
 const rangePosition = dayHigh > dayLow ? ((currentPrice - dayLow) / (dayHigh - dayLow)) * 100 : 100;
 
-const squeezeScore = Number((gapPercent * (rangePosition / 100)).toFixed(2));
+// If market is open, heavily factor in range dominance and active volume momentum
+const marketMultiplier = isMarketOpen ? 1.25 : 1.0;
+const squeezeScore = Number((gapPercent * (rangePosition / 100) * marketMultiplier).toFixed(2));
 
 return {
 symbol: stock.symbol,
@@ -58,6 +67,7 @@ price: Number(currentPrice.toFixed(2)),
 gapPercent: Number(gapPercent.toFixed(2)),
 rangePosition: Math.round(rangePosition),
 squeezeScore,
+verdict: squeezeScore > 80 ? '🔥 High Squeeze Potential' : '⚡ Moderate Momentum',
 };
 } catch {
 return null;
@@ -65,12 +75,20 @@ return null;
 })
 );
 
-// 4. Sort so the #1 highest-scoring market mover is at the top
+// 4. Sort and designate the #1 Top Contender at the very top
 const rankedSetups = results
 .filter((item) => item !== null && item.gapPercent >= 3.0)
 .sort((a, b) => b.squeezeScore - a.squeezeScore);
 
-return NextResponse.json(rankedSetups);
+if (rankedSetups.length > 0) {
+rankedSetups[0].topContender = true; // Clearly marks the #1 play for your strategy
+}
+
+return NextResponse.json({
+marketMode: isMarketOpen ? 'LIVE_MARKET_HOURS' : 'PRE_MARKET_PREPARATION',
+topContender: rankedSetups[0] || null,
+allSetups: rankedSetups,
+});
 } catch (error) {
 return NextResponse.json({ error: 'Scanner execution failed', details: error.message }, { status: 500 });
 }
