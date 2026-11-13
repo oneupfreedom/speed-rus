@@ -38,3 +38,26 @@ return {
 symbol: stock.symbol || 'UNKNOWN',
 name: stock.name || stock.symbol || 'Unknown Company',
 price: price,
+change: change,
+volume: volume,
+avgVolume: avgVolume,
+relVolume: Number(relVolume.toFixed(2)),
+score: score,
+classification: classification
+};
+})
+.filter((stock) => stock.price > 0.01)
+.sort((a, b) => b.score - a.score)
+.slice(0, 25);
+
+return NextResponse.json({
+success: true,
+data: processed,
+count: processed.length,
+timestamp: new Date().toISOString()
+});
+
+} catch (err) {
+return NextResponse.json({ success: false, error: err.message }, { status: 200 });
+}
+}
