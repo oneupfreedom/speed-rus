@@ -11,6 +11,7 @@ volume: number;
 relVolume: number;
 score: number;
 classification: string;
+actionAdvice: string;
 }
 
 export default function Home() {
@@ -26,13 +27,33 @@ const res = await fetch('/api/scanner');
 const json = await res.json();
 
 if (json.success) {
-setData(json.data);
+// Process data and inject pilot advisory labels based on ranking and time of day
+const currentHour = new Date().getHours();
+const isAfternoon = currentHour >= 12;
+
+const enhancedData = (json.data || []).map((stock: any, index: number) => {
+let actionAdvice = 'MONITOR';
+if (index === 0) {
+actionAdvice = 'PRIMARY HOLD (LEADER)';
+} else if (index === 1 || index === 2) {
+actionAdvice = 'ROTATION CANDIDATE';
+} else if (isAfternoon && stock.change > 15) {
+actionAdvice = 'PM CONTINUATION';
+}
+
+return {
+...stock,
+actionAdvice,
+};
+});
+
+setData(enhancedData);
 setLastSync(new Date().toLocaleTimeString());
 setError(null);
 } else {
 setError(json.error || 'Failed to fetch scanner data');
 }
-} catch (err: unknown) {
+} catch (err) {
 const message = err instanceof Error ? err.message : 'An unexpected error occurred';
 setError(message);
 } finally {
@@ -55,17 +76,19 @@ item.name.toLowerCase().includes(search.toLowerCase())
 return (
 <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black">
 <div className="max-w-7xl mx-auto space-y-6">
+
+{/* Header Section */}
 <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-6 rounded-2xl shadow-2xl gap-4">
 <div>
 <div className="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3">
 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-Live Momentum Feed
+Pilot Momentum Advisory Feed
 </div>
 <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white">
 Speedy Early-Ignition Engine
 </h1>
 <p className="text-slate-400 text-sm mt-1">
-Real-time tracking of explosive market gainers and breakout setups.
+Real-time tracking, scoring, and rotation guidance for active day trading.
 </p>
 </div>
 <div className="flex items-center gap-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
@@ -79,6 +102,7 @@ Refresh Feed
 </div>
 </div>
 
+{/* Search Bar */}
 <div className="relative">
 <input
 type="text"
@@ -89,12 +113,14 @@ className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-3.5
 />
 </div>
 
+{/* Error Display */}
 {error && (
 <div className="bg-red-950/60 border border-red-800 text-red-200 p-4 rounded-xl text-sm flex items-center gap-3">
 <span className="font-bold">Notice:</span> {error}
 </div>
 )}
 
+{/* Data Table Container */}
 <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
 <div className="overflow-x-auto">
 <table className="w-full text-left border-collapse">
@@ -104,20 +130,21 @@ className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-3.5
 <th className="p-4 text-right">Price / Change</th>
 <th className="p-4 text-right">Volume</th>
 <th className="p-4 text-right">Rel Vol</th>
-<th className="p-4 text-right">Momentum Score</th>
-<th className="p-4 text-right">Classification</th>
+<th className="p-4 text-right">Score</th>
+<th className="p-4 text-center">Setup Type</th>
+<th className="p-4 text-right">Pilot Advisory</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-slate-800/60 text-sm">
 {loading && data.length === 0 ? (
 <tr>
-<td colSpan={6} className="p-12 text-center text-slate-500 font-mono animate-pulse">
-Scanning live market nodes...
+<td colSpan={7} className="p-12 text-center text-slate-500 font-mono animate-pulse">
+Scanning market nodes...
 </td>
 </tr>
 ) : filteredData.length === 0 ? (
 <tr>
-<td colSpan={6} className="p-12 text-center text-slate-500">
+<td colSpan={7} className="p-12 text-center text-slate-500">
 No active setups matching your filter criteria right now.
 </td>
 </tr>
@@ -151,9 +178,9 @@ stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'
 {stock.score}{' '}
 <span className="text-xs text-slate-500 font-normal">/ 100</span>
 </td>
-<td className="p-4 text-right">
+<td className="p-4 text-center">
 <span
-className={`inline-block px-3 py-1 rounded-full text-[11px] font-extrabold tracking-wider uppercase shadow-sm ${
+className={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase shadow-sm ${
 stock.classification === 'EARLY IGNITION'
 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-amber-500/10'
 : stock.classification === 'BREAKOUT RUN'
@@ -162,6 +189,21 @@ stock.classification === 'EARLY IGNITION'
 }`}
 >
 {stock.classification}
+</span>
+</td>
+<td className="p-4 text-right">
+<span
+className={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase shadow-sm ${
+stock.actionAdvice.includes('PRIMARY HOLD')
+? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
+: stock.actionAdvice.includes('ROTATION')
+? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+: stock.actionAdvice.includes('CONTINUATION')
+? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+: 'bg-slate-800 text-slate-400 border border-slate-700'
+}`}
+>
+{stock.actionAdvice}
 </span>
 </td>
 </tr>
