@@ -1,28 +1,38 @@
-
 import { NextResponse } from 'next/server';
+import yahooFinance from 'yahoo-finance2';
 
 export async function GET() {
-const apiKey = process.env.FMP_API_KEY;
-
-if (!apiKey) {
-return NextResponse.json({ success: false, error: 'API Key missing on Vercel' }, { status: 200 });
-}
-
 try {
-const res = await fetch(`https://financialmodelingprep.com/stable/biggest-gainers?apikey=${apiKey}`);
-const gainers = await res.json();
+const queryOptions = { count: 25, region: 'US' };
+const results = await yahooFinance.trendingSymbols(queryOptions.region);
 
-if (!Array.isArray(gainers)) {
-const errorMsg = gainers["Error Message"] || gainers.message || "Invalid API response from FMP";
-return NextResponse.json({ success: false, error: errorMsg }, { status: 200 });
+const quotes = [];
+if (results && results.quotes) {
+for (const item of results.quotes) {
+const symbol = item.symbol;
+try {
+const quote = await yahooFinance.quote(symbol);
+if (quote) {
+quotes.push({
+symbol: quote.symbol,
+name: quote.longName || quote.shortName || quote.symbol,
+price: quote.regularMarketPrice || 0,
+change: quote.regularMarketChangePercent || 0,
+volume: quote.regularMarketVolume || 0,
+avgVolume: quote.averageDailyVolume3Month || quote.regularMarketVolume || 1,
+});
+}
+} catch (e) {
+// Skip individual quote errors if any symbol fails
+}
+}
 }
 
-const processed = gainers.map((stock) => {
-const price = stock.price || 0;
-const change = stock.changesPercentage || stock.changePercentage || stock.change || 0;
-
-const volume = stock.sharesTraded || stock.volume || 0;
-const avgVolume = stock.avgVolume || 500000;
+const processed = quotes.map((stock) => {
+const price = stock.price;
+const change = stock.change;
+const volume = stock.volume;
+const avgVolume = stock.avgVolume;
 
 const relVolume = avgVolume > 0 ? Number((volume / avgVolume).toFixed(2)) : 1;
 
@@ -36,7 +46,6 @@ else if (volume > 500000) score += 15;
 else if (volume > 100000) score += 5;
 
 if (price > 0.5 && price < 25) score += 15;
-
 if (score > 98) score = 98;
 
 let classification = "BUILDING BASE";
@@ -44,8 +53,8 @@ if (score >= 75) classification = "EARLY IGNITION";
 else if (score >= 60) classification = "BREAKOUT RUN";
 
 return {
-symbol: stock.symbol || 'UNKNOWN',
-name: stock.name || stock.symbol || 'Unknown Company',
+symbol: stock.symbol,
+name: stock.name,
 price: price,
 change: change,
 volume: volume,
@@ -54,9 +63,7 @@ score: score,
 classification: classification
 };
 })
-.filter((stock) => stock.price > 0.05 && stock.volume > 10000)
-.sort((a, b) => b.score - a.score)
-.slice(0, 25);
+.sort((a, b) => b.score - a.score);
 
 return NextResponse.json({
 success: true,
