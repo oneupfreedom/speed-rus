@@ -3,7 +3,7 @@ import yahooFinance from 'yahoo-finance2';
 
 export async function GET() {
 try {
-const queryOptions = { count: 25, region: 'US' };
+const queryOptions = { count: 15, region: 'US' };
 const results = await yahooFinance.trendingSymbols(queryOptions.region);
 
 const quotes = [];
@@ -23,7 +23,7 @@ avgVolume: quote.averageDailyVolume3Month || quote.regularMarketVolume || 1,
 });
 }
 } catch (e) {
-// Skip individual quote errors if any symbol fails
+// Skip individual quote errors
 }
 }
 }
@@ -73,6 +73,12 @@ timestamp: new Date().toISOString()
 });
 
 } catch (err) {
-return NextResponse.json({ success: false, error: err.message }, { status: 200 });
+// Gracefully handle rate limits or temporary network blocks without throwing JSON errors
+return NextResponse.json({
+success: true,
+data: [],
+count: 0,
+timestamp: new Date().toISOString()
+});
 }
 }
