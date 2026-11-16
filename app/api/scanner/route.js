@@ -1,24 +1,28 @@
 import { NextResponse } from 'next/server';
-import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-// Explicitly track your custom high-beta watchlist + broad market leaders
 const symbols = ['WULF', 'SOUN', 'GME', 'AMC', 'PLTR', 'MARA', 'RIOT', 'HUT', 'TSLA', 'NVDA', 'AAPL'];
 const results = [];
 
 try {
-for (const symbol of symbols) {
-try {
-const quote = await yahooFinance.quote(symbol);
-if (!quote) continue;
+// Instantiate YahooFinance properly for v3/v4+
+const yahooFinance = new YahooFinance();
 
-const price = quote.regularMarketPrice || quote.precio || 0;
-const prevClose = quote.regularMarketPreviousClose || price;
-const change = quote.regularMarketChangePercent || ((price - prevClose) / prevClose) * 100;
-const volume = quote.regularMarketVolume || quote.volume || 0;
-const avgVolume = quote.averageDailyVolume3Month || volume || 1;
+// Fetch all symbols in a single batch call (much faster & avoids throttling)
+const quotes = await yahooFinance.quote(symbols);
 
-// Calculate relative volume
+for (const quote of quotes) {
+if (!quote || !quote.symbol) continue;
+
+const price = quote.regularMarketPrice ?? 0;
+const prevClose = quote.regularMarketPreviousClose ?? price;
+const change = quote.regularMarketChangePercent ?? (prevClose ? ((price - prevClose) / prevClose) * 100 : 0);
+const volume = quote.regularMarketVolume ?? 0;
+const avgVolume = quote.averageDailyVolume3Month ?? volume ?? 1;
+
 const relVolume = Number((volume / (avgVolume || 1)).toFixed(2));
 
 // Custom momentum score calculation (0-100 scale)
@@ -38,8 +42,8 @@ classification = 'PULLBACK / DIP';
 }
 
 results.push({
-symbol: symbol.toUpperCase(),
-name: quote.longName || quote.shortName || symbol,
+symbol: quote.symbol.toUpperCase(),
+name: quote.longName || quote.shortName || quote.symbol,
 price: Number(price.toFixed(2)),
 change: Number(change.toFixed(2)),
 volume: volume,
@@ -47,9 +51,6 @@ relVolume: relVolume > 0 ? relVolume : 1.0,
 score: score,
 classification: classification,
 });
-} catch (err) {
-console.error(`Error fetching ${symbol}:`, err);
-}
 }
 
 // Sort results by score descending so the top momentum stock is always #1
@@ -63,7 +64,7 @@ timestamp: new Date().toISOString(),
 });
 } catch (error) {
 return NextResponse.json(
-{ success: false, error: error.message, data: [] },
+{ success: false, error: error instanceof Error ? error.message : String(error), data: [] },
 { status: 500 }
 );
 }
