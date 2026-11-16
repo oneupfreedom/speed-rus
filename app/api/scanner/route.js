@@ -3,19 +3,17 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-// 1. Your core high-beta watchlist
-const coreWatchlist = ['WULF', 'SOUN', 'GME', 'AMC', 'PLTR', 'MARA', 'RIOT', 'HUT', 'TSLA', 'NVDA', 'AAPL'];
-const dynamicSymbols = new Set(coreWatchlist);
+const dynamicSymbols = new Set();
 
 const headers = {
 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 };
 
 try {
-// 2. Pull top market-wide Day Gainers & Most Actives from Yahoo's live screener feed
+// 1. 100% Market-Wide Sweep via Yahoo live pre-defined screener feeds (Gainers & Most Actives)
 const screenerUrls = [
-'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds=day_gainers&count=15',
-'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds=most_actives&count=10',
+'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds=day_gainers&count=25',
+'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds=most_actives&count=25',
 ];
 
 await Promise.all(
@@ -26,13 +24,13 @@ if (!res.ok) return;
 const json = await res.json();
 const quotes = json?.finance?.result?.[0]?.quotes || [];
 for (const q of quotes) {
-// Filter out OTC/pink sheet junk and keep liquid US stocks
+// Filter out OTC/pink sheet junk and keep liquid US stocks with volume > 250k
 if (q?.symbol && !q.symbol.includes('.') && (q.regularMarketVolume || 0) > 250000) {
 dynamicSymbols.add(q.symbol.toUpperCase());
 }
 }
 } catch (e) {
-console.error('Screener fetch warning:', e);
+console.error('Market-wide screener fetch warning:', e);
 }
 })
 );
@@ -40,7 +38,7 @@ console.error('Screener fetch warning:', e);
 const symbolsList = Array.from(dynamicSymbols);
 const results = [];
 
-// 3. Fetch live + extended hours (pre-market & after-hours) data for all symbols
+// 2. Fetch live + extended hours data for every symbol found in the market sweep
 await Promise.all(
 symbolsList.map(async (symbol) => {
 try {
@@ -56,7 +54,7 @@ if (!meta) return;
 const regularPrice = meta.regularMarketPrice ?? 0;
 const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? regularPrice;
 
-// Grab the very latest extended-hours trade price if available
+// Grab the latest price print
 const closes = result?.indicators?.quote?.[0]?.close || [];
 const validCloses = closes.filter((c) => typeof c === 'number' && c > 0);
 const latestLivePrice = validCloses.length > 0 ? validCloses[validCloses.length - 1] : regularPrice;
@@ -64,7 +62,7 @@ const latestLivePrice = validCloses.length > 0 ? validCloses[validCloses.length 
 const activePrice = latestLivePrice || regularPrice;
 const change = prevClose ? ((activePrice - prevClose) / prevClose) * 100 : 0;
 
-// Calculate Opening Gap %
+// Opening Gap %
 const dayOpen = meta.regularMarketOpen ?? activePrice;
 const gapPercent = prevClose ? ((dayOpen - prevClose) / prevClose) * 100 : 0;
 
@@ -76,18 +74,18 @@ const total5dVol = validVols.reduce((sum, v) => sum + v, 0);
 const avgDailyVol = total5dVol > 0 ? total5dVol / 5 : volume || 1;
 const relVolume = Number((volume / (avgDailyVol || 1)).toFixed(2));
 
-// 4. Tactical Momentum Score (0-100)
-let score = 45;
-if (change > 0) score += Math.min(30, change * 2.5);
-if (gapPercent >= 3) score += 10;
+// 3. Tactical Momentum Score (0-100)
+let score = 40;
+if (change > 0) score += Math.min(35, change * 2.2);
+if (gapPercent >= 3) score += 12;
 if (relVolume > 1.2) score += Math.min(15, (relVolume - 1) * 8);
 score = Math.min(100, Math.max(10, Math.round(score)));
 
-// 5. Setup Classification
+// 4. Setup Classification (Isolating EARLY IGNITION leaders)[span_1](start_span)[span_1](end_span)
 let classification = 'MONITOR';
-if (gapPercent >= 3 && change >= 5 && relVolume >= 1.5) {
+if (gapPercent >= 3 && change >= 4 && relVolume >= 1.5) {
 classification = 'EARLY IGNITION';
-} else if (change >= 4) {
+} else if (change >= 5) {
 classification = 'BREAKOUT RUN';
 } else if (gapPercent >= 3) {
 classification = 'PRE/GAP WATCH';
@@ -106,12 +104,12 @@ score,
 classification,
 });
 } catch (err) {
-console.error(`Error fetching ${symbol}:`, err);
+console.error(`Error processing ${symbol}:`, err);
 }
 })
 );
 
-// Sort highest momentum score to the top
+// Sort highest tactical score to the top of the board
 results.sort((a, b) => b.score - a.score);
 
 return NextResponse.json({
