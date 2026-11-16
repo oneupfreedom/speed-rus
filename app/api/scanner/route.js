@@ -2,83 +2,69 @@ import { NextResponse } from 'next/server';
 import yahooFinance from 'yahoo-finance2';
 
 export async function GET() {
-try {
-const queryOptions = { count: 15, region: 'US' };
-const results = await yahooFinance.trendingSymbols(queryOptions.region);
+// Explicitly track your custom high-beta watchlist + broad market leaders
+const symbols = ['WULF', 'SOUN', 'GME', 'AMC', 'PLTR', 'MARA', 'RIOT', 'HUT', 'TSLA', 'NVDA', 'AAPL'];
+const results = [];
 
-const quotes = [];
-if (results && results.quotes) {
-for (const item of results.quotes) {
-const symbol = item.symbol;
+try {
+for (const symbol of symbols) {
 try {
 const quote = await yahooFinance.quote(symbol);
-if (quote) {
-quotes.push({
-symbol: quote.symbol,
-name: quote.longName || quote.shortName || quote.symbol,
-price: quote.regularMarketPrice || 0,
-change: quote.regularMarketChangePercent || 0,
-volume: quote.regularMarketVolume || 0,
-avgVolume: quote.averageDailyVolume3Month || quote.regularMarketVolume || 1,
-});
+if (!quote) continue;
+
+const price = quote.regularMarketPrice || quote.precio || 0;
+const prevClose = quote.regularMarketPreviousClose || price;
+const change = quote.regularMarketChangePercent || ((price - prevClose) / prevClose) * 100;
+const volume = quote.regularMarketVolume || quote.volume || 0;
+const avgVolume = quote.averageDailyVolume3Month || volume || 1;
+
+// Calculate relative volume
+const relVolume = Number((volume / (avgVolume || 1)).toFixed(2));
+
+// Custom momentum score calculation (0-100 scale)
+let score = 50;
+if (change > 0) score += Math.min(30, change * 3);
+if (relVolume > 1.0) score += Math.min(20, (relVolume - 1) * 10);
+score = Math.min(100, Math.max(10, Math.round(score)));
+
+// Classification based on momentum characteristics
+let classification = 'MONITOR';
+if (change >= 5 && relVolume >= 1.5) {
+classification = 'EARLY IGNITION';
+} else if (change >= 3) {
+classification = 'BREAKOUT RUN';
+} else if (change < 0) {
+classification = 'PULLBACK / DIP';
 }
-} catch (e) {
-// Skip individual quote errors
-}
-}
-}
 
-const processed = quotes.map((stock) => {
-const price = stock.price;
-const change = stock.change;
-const volume = stock.volume;
-const avgVolume = stock.avgVolume;
-
-const relVolume = avgVolume > 0 ? Number((volume / avgVolume).toFixed(2)) : 1;
-
-let score = 40;
-if (change > 30) score += 25;
-else if (change > 15) score += 15;
-else if (change > 5) score += 5;
-
-if (volume > 2000000) score += 25;
-else if (volume > 500000) score += 15;
-else if (volume > 100000) score += 5;
-
-if (price > 0.5 && price < 25) score += 15;
-if (score > 98) score = 98;
-
-let classification = "BUILDING BASE";
-if (score >= 75) classification = "EARLY IGNITION";
-else if (score >= 60) classification = "BREAKOUT RUN";
-
-return {
-symbol: stock.symbol,
-name: stock.name,
-price: price,
-change: change,
+results.push({
+symbol: symbol.toUpperCase(),
+name: quote.longName || quote.shortName || symbol,
+price: Number(price.toFixed(2)),
+change: Number(change.toFixed(2)),
 volume: volume,
-relVolume: relVolume,
+relVolume: relVolume > 0 ? relVolume : 1.0,
 score: score,
-classification: classification
-};
-})
-.sort((a, b) => b.score - a.score);
-
-return NextResponse.json({
-success: true,
-data: processed,
-count: processed.length,
-timestamp: new Date().toISOString()
+classification: classification,
 });
-
 } catch (err) {
-// Gracefully handle rate limits or temporary network blocks without throwing JSON errors
+console.error(`Error fetching ${symbol}:`, err);
+}
+}
+
+// Sort results by score descending so the top momentum stock is always #1
+results.sort((a, b) => b.score - a.score);
+
 return NextResponse.json({
 success: true,
-data: [],
-count: 0,
-timestamp: new Date().toISOString()
+count: results.length,
+data: results,
+timestamp: new Date().toISOString(),
 });
+} catch (error) {
+return NextResponse.json(
+{ success: false, error: error.message, data: [] },
+{ status: 500 }
+);
 }
 }
