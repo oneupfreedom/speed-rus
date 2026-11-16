@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import YahooFinance from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,20 +7,36 @@ const symbols = ['WULF', 'SOUN', 'GME', 'AMC', 'PLTR', 'MARA', 'RIOT', 'HUT', 'T
 const results = [];
 
 try {
-// Instantiate YahooFinance properly for v3/v4+
-const yahooFinance = new YahooFinance();
+await Promise.all(
+symbols.map(async (symbol) => {
+try {
+const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+const res = await fetch(url, {
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+},
+cache: 'no-store',
+});
 
-// Fetch all symbols in a single batch call (much faster & avoids throttling)
-const quotes = await yahooFinance.quote(symbols);
+if (!res.ok) return;
 
-for (const quote of quotes) {
-if (!quote || !quote.symbol) continue;
+const json = await res.json();
+const result = json?.chart?.result?.[0];
+const meta = result?.meta;
+if (!meta) return;
 
-const price = quote.regularMarketPrice ?? 0;
-const prevClose = quote.regularMarketPreviousClose ?? price;
-const change = quote.regularMarketChangePercent ?? (prevClose ? ((price - prevClose) / prevClose) * 100 : 0);
-const volume = quote.regularMarketVolume ?? 0;
-const avgVolume = quote.averageDailyVolume3Month ?? volume ?? 1;
+const price = meta.regularMarketPrice ?? 0;
+const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+const volume = meta.regularMarketVolume ?? 0;
+
+// Calculate 5-day average volume from historical bars for accurate Rel Vol
+const quoteVolumes = result?.indicators?.quote?.[0]?.volume || [];
+const validVols = quoteVolumes.filter((v) => typeof v === 'number' && v > 0);
+const avgVolume =
+validVols.length > 0
+? validVols.reduce((sum, v) => sum + v, 0) / validVols.length
+: volume || 1;
 
 const relVolume = Number((volume / (avgVolume || 1)).toFixed(2));
 
@@ -42,8 +57,8 @@ classification = 'PULLBACK / DIP';
 }
 
 results.push({
-symbol: quote.symbol.toUpperCase(),
-name: quote.longName || quote.shortName || quote.symbol,
+symbol: symbol.toUpperCase(),
+name: meta.longName || meta.shortName || symbol,
 price: Number(price.toFixed(2)),
 change: Number(change.toFixed(2)),
 volume: volume,
@@ -51,7 +66,11 @@ relVolume: relVolume > 0 ? relVolume : 1.0,
 score: score,
 classification: classification,
 });
+} catch (err) {
+console.error(`Error fetching ${symbol}:`, err);
 }
+})
+);
 
 // Sort results by score descending so the top momentum stock is always #1
 results.sort((a, b) => b.score - a.score);
