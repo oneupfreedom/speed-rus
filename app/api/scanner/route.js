@@ -10,8 +10,22 @@ Accept: 'application/json',
 };
 
 /**
+* Curated fallback liquid momentum & high-beta basket so the scanner
+* remains active even if Yahoo blocks unauthenticated screener endpoints from Vercel IPs.
+* Strict price, volume, and score gates still filter out anything not moving today.
+*/
+const FALLBACK_MOMENTUM_BASKET = [
+'PANW', 'NVDA', 'TSLA', 'PLTR', 'AMD', 'META', 'AMZN', 'AAPL', 'MSFT', 'GOOGL',
+'COIN', 'MSTR', 'SMCI', 'ARM', 'AVGO', 'NFLX', 'NU', 'BILL', 'SOFI', 'HOOD',
+'RKLB', 'IONQ', 'AFRM', 'UPST', 'CVNA', 'MARA', 'RIOT', 'WULF', 'HUT', 'SOUN',
+'GME', 'AMC', 'SEAT', 'MXL', 'OUST', 'PDD', 'BABA', 'WMT', 'SNOW', 'CRWD',
+'NET', 'DDOG', 'MDB', 'SHOP', 'XYZ', 'UBER', 'DASH', 'ABNB', 'DELL', 'MRVL',
+'MU', 'QCOM', 'INTC', 'UNH', 'AI', 'LUNR', 'ASTS', 'ACHR', 'JOBY', 'OKLO'
+];
+
+/**
 * Fetch live market-wide movers from Yahoo Finance pre-defined screeners
-* (day_gainers and most_actives) to capture all surging equities without a static watchlist.
+* (day_gainers and most_actives) when permitted by Yahoo.
 */
 async function fetchScreenerTickers(scrId, count = 40) {
 try {
@@ -203,20 +217,27 @@ setup,
 
 export async function GET() {
 try {
-// 1. Sweep market-wide gainers & most active equities
+// 1. Sweep market-wide gainers & most active equities, merged with liquid fallback basket
 const [gainers, actives] = await Promise.all([
 fetchScreenerTickers('day_gainers', 45),
 fetchScreenerTickers('most_actives', 45),
 ]);
 
+const screenerSource =
+gainers.length > 0 || actives.length > 0
+? 'LIVE_SCREENER_PLUS_BASKET'
+: 'FALLBACK_MOMENTUM_BASKET';
+
 // Deduplicate tickers (exclude indices/ETFs with ^ or =)
-const uniqueTickers = Array.from(new Set([...gainers, ...actives])).filter(
+const uniqueTickers = Array.from(
+new Set([...gainers, ...actives, ...FALLBACK_MOMENTUM_BASKET])
+).filter(
 (sym) => !sym.includes('^') && !sym.includes('=') && !sym.includes('.')
 );
 
 // 2. Fetch live metrics in parallel
 const metricsList = await Promise.all(
-uniqueTickers.slice(0, 65).map((sym) => fetchTickerMetrics(sym))
+uniqueTickers.slice(0, 80).map((sym) => fetchTickerMetrics(sym))
 );
 
 // 3. Score, filter, and rank top momentum setups (Display floor: 30, Top Leader: 72+)
@@ -243,6 +264,7 @@ return NextResponse.json({
 success: true,
 timestamp: new Date().toISOString(),
 mode: 'INTRADAY_FIRST_MOVER_ROTATION',
+source: screenerSource,
 count: ranked.length,
 stocks: ranked,
 });
