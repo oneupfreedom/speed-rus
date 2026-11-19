@@ -105,9 +105,9 @@ return null;
 }
 
 /**
-* Mid-Session VWAP & Relative Volume Breakout Scoring Engine
-* Rewards regular-hours institutional accumulation, VWAP reclaims, and High-of-Day breakouts
-* while penalizing fading overnight gappers and thin volume.
+* Tuned Mid-Session VWAP & Relative Volume Breakout Scoring Engine
+* Captures first-mover institutional rotations (1.25x+ Rel Vol, Score 72+ Top Leader)
+* while maintaining $3.00+ and 250k+ volume quality gates.
 */
 function evaluateIntradaySetup(stock) {
 const {
@@ -136,37 +136,37 @@ const rangeSpan = dayHigh - dayLow;
 const rangePosition = rangeSpan > 0 ? (price - dayLow) / rangeSpan : 0.5;
 
 // Must be net positive on the day or actively breaking out intraday
-if (totalChangePct < 2.0 && intradayMovePct < 2.5) {
+if (totalChangePct < 2.0 && intradayMovePct < 2.0) {
 return null;
 }
 
 let score = 0;
 
-// 1. Relative Volume Fuel (Max 35 pts)
-if (relVol >= 3.0) score += 35;
-else if (relVol >= 2.0) score += 28;
-else if (relVol >= 1.5) score += 20;
-else if (relVol >= 1.0) score += 8;
-else score -= 15; // Penalize thin volume movers
+// 1. Relative Volume Fuel (Max 35 pts) - Tuned to catch 1.25x+ first-mover ignitions
+if (relVol >= 2.5) score += 35;
+else if (relVol >= 1.75) score += 28;
+else if (relVol >= 1.25) score += 22;
+else if (relVol >= 0.9) score += 10;
+else score -= 12;
 
 // 2. High-of-Day Range Position (Max 35 pts)
-if (rangePosition >= 0.90) score += 35; // Pressing right at High of Day
-else if (rangePosition >= 0.80) score += 25; // Upper 20% breakout zone
-else if (rangePosition >= 0.65) score += 12;
-else score -= 20; // Stuck or fading in lower half of daily range
+if (rangePosition >= 0.88) score += 35; // Pressing right at High of Day
+else if (rangePosition >= 0.75) score += 26; // Upper 25% breakout zone
+else if (rangePosition >= 0.60) score += 14;
+else score -= 15; // Stuck or fading in lower half of daily range
 
 // 3. Intraday Ignition Surge (Max 30 pts) - Rewards red-to-green & midday breakouts
 const activeSurge = Math.max(intradayMovePct, offLowPct * 0.75);
-if (activeSurge >= 8.0) score += 30;
-else if (activeSurge >= 4.0) score += 22;
-else if (activeSurge >= 2.0) score += 12;
+if (activeSurge >= 7.0) score += 30;
+else if (activeSurge >= 3.5) score += 22;
+else if (activeSurge >= 1.8) score += 14;
 
 // 4. VWAP Confirmation & Fading Overnight Gap Penalty
 const aboveVwap = price > vwap;
 if (aboveVwap) {
 score += 10; // Institutional buyers in control above VWAP
 } else {
-score -= 15; // Weak / below VWAP
+score -= 12; // Weak / below VWAP
 }
 
 // Penalize exhausted overnight gaps (>40%) trading below regular session open
@@ -181,9 +181,9 @@ const finalScore = Math.max(0, Math.min(100, Math.round(score)));
 let setup = 'PRE/GAP WATCH';
 if (isFadingGap || !aboveVwap) {
 setup = 'PULLBACK / DIP';
-} else if (finalScore >= 85 && relVol >= 1.5 && rangePosition >= 0.80) {
+} else if (finalScore >= 72 && relVol >= 1.25 && rangePosition >= 0.75) {
 setup = 'EARLY IGNITION';
-} else if (aboveVwap && rangePosition >= 0.65) {
+} else if (aboveVwap && rangePosition >= 0.60) {
 setup = 'BREAKOUT RUN';
 }
 
@@ -219,18 +219,18 @@ const metricsList = await Promise.all(
 uniqueTickers.slice(0, 65).map((sym) => fetchTickerMetrics(sym))
 );
 
-// 3. Score, filter, and rank top momentum setups
+// 3. Score, filter, and rank top momentum setups (Display floor: 30, Top Leader: 72+)
 const ranked = metricsList
 .filter(Boolean)
 .map((stock) => evaluateIntradaySetup(stock))
-.filter((item) => item && item.score >= 40)
+.filter((item) => item && item.score >= 30)
 .sort((a, b) => b.score - a.score || b.relVol - a.relVol)
 .slice(0, 15)
 .map((item, idx) => {
 let signal = 'MONITOR';
-if (idx === 0 && item.score >= 80 && item.relVol >= 1.5) {
+if (idx === 0 && item.score >= 72 && item.relVol >= 1.25) {
 signal = 'TOP LEADER';
-} else if (idx <= 2 && item.score >= 70) {
+} else if (idx <= 2 && item.score >= 60) {
 signal = 'CHALLENGER';
 }
 return {
@@ -242,7 +242,7 @@ signal,
 return NextResponse.json({
 success: true,
 timestamp: new Date().toISOString(),
-mode: 'INTRADAY_VWAP_BREAKOUT',
+mode: 'INTRADAY_FIRST_MOVER_ROTATION',
 count: ranked.length,
 stocks: ranked,
 });
