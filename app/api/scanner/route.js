@@ -1,295 +1,191 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-const YAHOO_HEADERS = {
-'User-Agent':
-'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-Accept: 'application/json',
-};
-
-const FALLBACK_MOMENTUM_BASKET = [
-'PANW', 'NVDA', 'TSLA', 'PLTR', 'AMD', 'META', 'AMZN', 'AAPL', 'MSFT', 'GOOGL',
-'COIN', 'MSTR', 'SMCI', 'ARM', 'AVGO', 'NFLX', 'NU', 'BILL', 'SOFI', 'HOOD',
-'RKLB', 'IONQ', 'AFRM', 'UPST', 'CVNA', 'MARA', 'RIOT', 'WULF', 'HUT', 'SOUN',
-'GME', 'AMC', 'SEAT', 'MXL', 'OUST', 'PDD', 'BABA', 'WMT', 'SNOW', 'CRWD',
-'NET', 'DDOG', 'MDB', 'SHOP', 'XYZ', 'UBER', 'DASH', 'ABNB', 'DELL', 'MRVL',
-'MU', 'QCOM', 'INTC', 'UNH', 'AI', 'LUNR', 'ASTS', 'ACHR', 'JOBY', 'OKLO',
-'PSTG', 'VVV', 'BWA', 'OKTA', 'FUTU', 'NTRA', 'COHR', 'NTSK', 'YMM', 'TUSK'
+const FALLBACK_TICKERS = [
+'NVDA', 'AMD', 'TSLA', 'AAPL', 'META', 'AMZN', 'MSFT', 'GOOGL', 'PLTR', 'SOFI',
+'COIN', 'MARA', 'RIOT', 'HOOD', 'SMCI', 'ARM', 'AVGO', 'MU', 'INTC', 'QCOM',
+'BABA', 'PDD', 'JD', 'NIO', 'XPEV', 'LI', 'RIVN', 'LCID', 'F', 'GM',
+'UBER', 'LYFT', 'DASH', 'ABNB', 'SHOP', 'SQ', 'PYPL', 'AFRM', 'UPST', 'NET',
+'CRWD', 'PANW', 'ZS', 'DDOG', 'SNOW', 'MDB', 'PATH', 'AI', 'SOUN', 'IONQ',
+'RKLB', 'LUNR', 'ASTS', 'ACHR', 'JOBY', 'IREN', 'CLSK', 'WULF', 'HUT', 'BITF'
 ];
 
-async function fetchScreenerTickers(scrId, count = 45) {
+async function fetchScreenerSymbols(scrId, count = 50) {
 try {
 const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds=${scrId}&count=${count}`;
-const res = await fetch(url, { headers: YAHOO_HEADERS, cache: 'no-store' });
+const res = await fetch(url, {
+headers: { 'User-Agent': 'Mozilla/5.0' },
+cache: 'no-store',
+});
 if (!res.ok) return [];
 const data = await res.json();
 const quotes = data?.finance?.result?.[0]?.quotes || [];
 return quotes.map((q) => q.symbol).filter(Boolean);
-} catch (err) {
-console.error(`Error fetching screener ${scrId}:`, err);
+} catch {
 return [];
 }
 }
 
-/**
-* Compute average daily volume from recent completed daily bars via v8/finance/chart
-* (avoids v7/finance/quote cookie/crumb blocks).
-*/
-async function fetchDailyAvgVolume(symbol) {
+async function analyzeTicker(symbol) {
 try {
 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
 symbol
-)}?interval=1d&range=1mo`;
-const res = await fetch(url, { headers: YAHOO_HEADERS, cache: 'no-store' });
-if (!res.ok) return 0;
+)}?interval=5m&range=5d`;
+const res = await fetch(url, {
+headers: { 'User-Agent': 'Mozilla/5.0' },
+cache: 'no-store',
+});
+if (!res.ok) return null;
 
-const data = await res.json();
-const result = data?.chart?.result?.[0];
-if (!result) return 0;
-
-const metaAvg =
-result.meta?.averageDailyVolume3Month ||
-result.meta?.averageDailyVolume10Day ||
-0;
-if (metaAvg > 0) return metaAvg;
-
-const dailyVols = (result.indicators?.quote?.[0]?.volume || []).filter(
-(v) => typeof v === 'number' && v > 0
-);
-// Exclude the last element if it is the partial current trading session
-const completedSessions =
-dailyVols.length > 1 ? dailyVols.slice(0, -1) : dailyVols;
-if (completedSessions.length === 0) return 0;
-
-const sum = completedSessions.reduce((acc, v) => acc + v, 0);
-return Math.round(sum / completedSessions.length);
-} catch (err) {
-return 0;
-}
-}
-
-async function fetchTickerMetrics(symbol) {
-try {
-const [chartRes, avgVolume] = await Promise.all([
-fetch(
-`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-symbol
-)}?interval=5m&range=1d&includePrePost=true`,
-{ headers: YAHOO_HEADERS, cache: 'no-store' }
-),
-fetchDailyAvgVolume(symbol),
-]);
-
-if (!chartRes.ok) return null;
-const data = await chartRes.json();
-const result = data?.chart?.result?.[0];
+const json = await res.json();
+const result = json?.chart?.result?.[0];
 if (!result) return null;
 
 const meta = result.meta || {};
-const quote = result.indicators?.quote?.[0] || {};
-const closes = (quote.close || []).filter((v) => v != null);
-const volumes = (quote.volume || []).filter((v) => v != null);
+const price = Number(meta.regularMarketPrice || 0);
+const prevClose = Number(meta.chartPreviousClose || meta.previousClose || 0);
+const dayHigh = Number(meta.regularMarketDayHigh || price);
+const dayLow = Number(meta.regularMarketDayLow || price);
+const volume = Number(meta.regularMarketVolume || 0);
 
-const price =
-meta.regularMarketPrice ||
-(closes.length > 0 ? closes[closes.length - 1] : 0);
-const prevClose = meta.chartPreviousClose || meta.previousClose || 0;
-const open = meta.regularMarketOpen || (closes.length > 0 ? closes[0] : price);
-const dayHigh = meta.regularMarketDayHigh || Math.max(...closes, price);
-const dayLow = meta.regularMarketDayLow || Math.min(...closes, price);
-const volume =
-meta.regularMarketVolume ||
-volumes.reduce((sum, v) => sum + v, 0);
+if (price < 3 || volume < 250000 || prevClose <= 0) return null;
 
-const resolvedAvgVolume =
-avgVolume ||
-meta.averageDailyVolume3Month ||
-meta.averageDailyVolume10Day ||
-0;
+const changePercent = ((price - prevClose) / prevClose) * 100;
+const dayRange = Math.max(dayHigh - dayLow, 0.01);
+const rangePosition = (price - dayLow) / dayRange;
+const spreadPercent = (dayRange / price) * 100;
 
-let pvSum = 0;
-let volSum = 0;
-const highs = quote.high || [];
-const lows = quote.low || [];
-const barCloses = quote.close || [];
-const barVols = quote.volume || [];
+const timestamps = result.timestamp || [];
+const volumes = result.indicators?.quote?.[0]?.volume || [];
+const closes = result.indicators?.quote?.[0]?.close || [];
 
-for (let i = 0; i < barCloses.length; i++) {
-if (
-highs[i] != null &&
-lows[i] != null &&
-barCloses[i] != null &&
-barVols[i] != null &&
-barVols[i] > 0
-) {
-const typicalPrice = (highs[i] + lows[i] + barCloses[i]) / 3;
-pvSum += typicalPrice * barVols[i];
-volSum += barVols[i];
-}
-}
+let todayVol = 0;
+let priorVolTotal = 0;
+let priorBars = 0;
+const nowDay = new Date().toDateString();
 
-const vwap = volSum > 0 ? pvSum / volSum : (dayHigh + dayLow + price) / 3;
-
-return {
-symbol,
-name: meta.shortName || meta.longName || symbol,
-price,
-prevClose,
-open,
-dayHigh,
-dayLow,
-volume,
-avgVolume: resolvedAvgVolume,
-vwap,
-};
-} catch (err) {
-return null;
-}
-}
-
-function evaluateIntradaySetup(stock) {
-const {
-price,
-prevClose,
-open,
-dayHigh,
-dayLow,
-volume,
-avgVolume,
-vwap,
-} = stock;
-
-if (!price || price < 3.0 || !volume || volume < 250000) {
-return null;
-}
-
-const relVol = avgVolume > 0 ? Number((volume / avgVolume).toFixed(2)) : 0;
-const totalChangePct =
-prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
-const intradayMovePct = open > 0 ? ((price - open) / open) * 100 : 0;
-const offLowPct = dayLow > 0 ? ((price - dayLow) / dayLow) * 100 : 0;
-
-const rangeSpan = dayHigh - dayLow;
-const rangePosition = rangeSpan > 0 ? (price - dayLow) / rangeSpan : 0.5;
-
-if (totalChangePct < 2.0 && intradayMovePct < 2.0) {
-return null;
-}
-
-let score = 0;
-
-// 1. Relative Volume Fuel (Max 35 pts)
-if (relVol >= 2.5) score += 35;
-else if (relVol >= 1.75) score += 28;
-else if (relVol >= 1.25) score += 22;
-else if (relVol >= 0.9) score += 10;
-else if (avgVolume > 0) score -= 12;
-
-// 2. High-of-Day Range Position (Max 35 pts)
-if (rangePosition >= 0.88) score += 35;
-else if (rangePosition >= 0.75) score += 26;
-else if (rangePosition >= 0.60) score += 14;
-else score -= 15;
-
-// 3. Intraday Ignition Surge (Max 30 pts)
-const activeSurge = Math.max(intradayMovePct, offLowPct * 0.75);
-if (activeSurge >= 7.0) score += 30;
-else if (activeSurge >= 3.5) score += 22;
-else if (activeSurge >= 1.8) score += 14;
-
-// 4. VWAP Confirmation & Fading Overnight Gap Penalty
-const aboveVwap = price > vwap;
-if (aboveVwap) {
-score += 10;
+for (let i = 0; i < timestamps.length; i++) {
+const v = Number(volumes[i] || 0);
+if (v <= 0) continue;
+const barDay = new Date(timestamps[i] * 1000).toDateString();
+if (barDay === nowDay) {
+todayVol += v;
 } else {
-score -= 12;
+priorVolTotal += v;
+priorBars++;
+}
 }
 
-const isFadingGap = totalChangePct > 40 && price < open;
-if (isFadingGap) {
-score -= 30;
+const avgBarVol = priorBars > 0 ? priorVolTotal / priorBars : 0;
+const todayBars = timestamps.filter(
+(t) => new Date(t * 1000).toDateString() === nowDay
+).length;
+const expectedVol = avgBarVol * Math.max(todayBars, 1);
+const relVol =
+expectedVol > 0 ? Number((todayVol / expectedVol).toFixed(2)) : 1.0;
+
+const recentCloses = closes.slice(-6).filter((c) => typeof c === 'number');
+let recentTightness = 1;
+if (recentCloses.length >= 4) {
+const rMax = Math.max(...recentCloses);
+const rMin = Math.min(...recentCloses);
+recentTightness = (rMax - rMin) / Math.max(price, 1);
 }
 
-const finalScore = Math.max(0, Math.min(100, Math.round(score)));
+const pctPoints = Math.min(Math.max(changePercent * 3.2, 0), 34);
+const rvolPoints = Math.min(relVol * 18, 32);
+const rangePoints = Math.round(rangePosition * 24);
+const coilBonus =
+changePercent >= 1.5 &&
+changePercent <= 9.5 &&
+rangePosition >= 0.65 &&
+recentTightness <= 0.018
+? 12
+: 0;
 
-let setup = 'PRE/GAP WATCH';
-if (isFadingGap || !aboveVwap) {
+const score = Math.min(
+99,
+Math.round(pctPoints + rvolPoints + rangePoints + coilBonus)
+);
+
+if (score < 30) return null;
+
+let setup = 'BREAKOUT RUN';
+if (
+changePercent >= 1.5 &&
+changePercent <= 9.5 &&
+rangePosition >= 0.65 &&
+relVol >= 1.15 &&
+recentTightness <= 0.02
+) {
+setup = 'COIL POP';
+} else if (rangePosition < 0.55 && changePercent > 2) {
 setup = 'PULLBACK / DIP';
-} else if (finalScore >= 72 && relVol >= 1.25 && rangePosition >= 0.75) {
-setup = 'EARLY IGNITION';
-} else if (aboveVwap && rangePosition >= 0.60) {
-setup = 'BREAKOUT RUN';
+}
+
+let signal = 'MONITOR';
+if (score >= 72 && relVol >= 1.25) {
+signal = 'TOP LEADER';
+} else if (score >= 60) {
+signal = 'CHALLENGER';
 }
 
 return {
-ticker: stock.symbol,
-name: stock.name,
+ticker: symbol,
+name: meta.shortName || meta.symbol || symbol,
 price: Number(price.toFixed(2)),
-changePercent: Number(totalChangePct.toFixed(2)),
-intradayChangePercent: Number(intradayMovePct.toFixed(2)),
+changePercent: Number(changePercent.toFixed(2)),
 relVol,
-vwap: Number(vwap.toFixed(2)),
-rangePosition: Number((rangePosition * 100).toFixed(0)),
-score: finalScore,
+rangePosition: Number(rangePosition.toFixed(2)),
+spreadPercent: Number(spreadPercent.toFixed(2)),
+score,
 setup,
+signal,
 };
+} catch {
+return null;
+}
+}
+
+async function analyzeInBatches(symbols, batchSize = 30) {
+const allResults = [];
+for (let i = 0; i < symbols.length; i += batchSize) {
+const batch = symbols.slice(i, i + batchSize);
+const batchResults = await Promise.all(batch.map(analyzeTicker));
+allResults.push(...batchResults);
+}
+return allResults;
 }
 
 export async function GET() {
 try {
-const [gainers, actives] = await Promise.all([
-fetchScreenerTickers('day_gainers', 45),
-fetchScreenerTickers('most_actives', 45),
+const [gainers, actives, smallCaps] = await Promise.all([
+fetchScreenerSymbols('day_gainers', 50),
+fetchScreenerSymbols('most_actives', 50),
+fetchScreenerSymbols('aggressive_small_caps', 50),
 ]);
 
-const screenerSource =
-gainers.length > 0 || actives.length > 0
-? 'LIVE_SCREENER_PLUS_BASKET'
-: 'FALLBACK_MOMENTUM_BASKET';
-
-const uniqueTickers = Array.from(
-new Set([...gainers, ...actives, ...FALLBACK_MOMENTUM_BASKET])
+const uniqueSymbols = Array.from(
+new Set([...gainers, ...actives, ...smallCaps, ...FALLBACK_TICKERS])
 )
-.filter((sym) => !sym.includes('^') && !sym.includes('=') && !sym.includes('.'))
-.slice(0, 75);
+.filter((s) => !s.includes('.') && !s.includes('-'))
+.slice(0, 120);
 
-const metricsList = await Promise.all(
-uniqueTickers.map((sym) => fetchTickerMetrics(sym))
-);
-
-const ranked = metricsList
+const results = await analyzeInBatches(uniqueSymbols, 30);
+const stocks = results
 .filter(Boolean)
-.map((stock) => evaluateIntradaySetup(stock))
-.filter((item) => item && item.score >= 30)
-.sort((a, b) => b.score - a.score || b.relVol - a.relVol)
-.slice(0, 15)
-.map((item, idx) => {
-let signal = 'MONITOR';
-if (idx === 0 && item.score >= 72 && item.relVol >= 1.25) {
-signal = 'TOP LEADER';
-} else if (idx <= 2 && item.score >= 60) {
-signal = 'CHALLENGER';
-}
-return {
-...item,
-signal,
-};
-});
+.sort((a, b) => b.score - a.score)
+.slice(0, 20);
 
 return NextResponse.json({
 success: true,
+scannedCount: uniqueSymbols.length,
+count: stocks.length,
 timestamp: new Date().toISOString(),
-mode: 'INTRADAY_FIRST_MOVER_ROTATION',
-source: screenerSource,
-count: ranked.length,
-stocks: ranked,
+stocks,
 });
-} catch (error) {
-console.error('Scanner API Error:', error);
+} catch (err) {
 return NextResponse.json(
-{ success: false, error: 'Failed to run market-wide intraday scan' },
+{ success: false, error: err.message || 'Scanner failed', stocks: [] },
 { status: 500 }
 );
 }
