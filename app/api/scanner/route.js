@@ -32,8 +32,13 @@ const result = data?.chart?.result?.[0];
 const meta = result?.meta;
 if (!meta) return null;
 
-const volumes = Array.isArray(result?.indicators?.quote?.[0]?.volume)
-? result.indicators.quote[0].volume.filter((v) => typeof v === 'number' && v > 0)
+const quote = result?.indicators?.quote?.[0] || {};
+const closes = Array.isArray(quote.close)
+? quote.close.filter((c) => typeof c === 'number' && Number.isFinite(c) && c > 0)
+: [];
+
+const volumes = Array.isArray(quote.volume)
+? quote.volume.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0)
 : [];
 
 const latestBarVol = volumes.length > 0 ? volumes[volumes.length - 1] : 0;
@@ -43,10 +48,18 @@ priorBars.length > 0
 ? priorBars.reduce((sum, v) => sum + v, 0) / priorBars.length
 : 0;
 
-const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? 0);
-const prevClose = Number(
-meta.chartPreviousClose ?? meta.previousClose ?? price
+// Use prior daily close from series when available, falling back to meta
+const priorDailyClose =
+closes.length >= 2
+? closes[closes.length - 2]
+: Number(meta.regularMarketPreviousClose ?? meta.previousClose ?? meta.chartPreviousClose ?? 0);
+
+const price = Number(
+meta.regularMarketPrice ??
+(closes.length > 0 ? closes[closes.length - 1] : 0) ??
+0
 );
+
 const volume = Number(meta.regularMarketVolume ?? latestBarVol ?? 0);
 const avgVol = Number(
 meta.averageDailyVolume3Month ??
@@ -59,14 +72,14 @@ const marketCap = Number(meta.marketCap ?? 0);
 if (!price || price <= 0) return null;
 
 const changePercent =
-prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+priorDailyClose > 0 ? ((price - priorDailyClose) / priorDailyClose) * 100 : 0;
 const relVol = avgVol > 0 && volume > 0 ? volume / avgVol : 1;
 
 return {
 symbol: meta.symbol || symbol,
 name: meta.shortName || meta.longName || symbol,
 price,
-prevClose,
+prevClose: priorDailyClose,
 changePercent,
 relVol,
 marketCap,
