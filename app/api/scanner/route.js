@@ -1,121 +1,115 @@
 
 import { NextResponse } from 'next/server';
 
-export const maxDuration = 60;
+const DEFAULT_TICKERS = [
+'NVDA', 'TSLA', 'AMD', 'SMCI', 'MARA', 'RIOT', 'COIN', 'MSTR', 'PLTR', 'SOFI',
+'IONQ', 'RGTI', 'QUBT', 'D-WAVE', 'QBTS', 'OKLO', 'SMR', 'CCJ', 'UEC', 'DNN',
+'LUNR', 'RKLB', 'ASTS', 'ACHR', 'JOBY', 'HIMS', 'AFRM', 'UPST', 'HOOD', 'RIVN',
+'LCID', 'NIO', 'XPEV', 'BABA', 'BIDU', 'PDD', 'JD', 'ARM', 'MRVL', 'AVGO',
+'MU', 'INTC', 'QCOM', 'TXN', 'AMAT', 'LRCX', 'KLAC', 'ASML', 'SNOW', 'NET',
+'DDOG', 'MDB', 'PANW', 'CRWD', 'ZS', 'OKTA', 'SHOP.TO', 'CSU.TO', 'DFN.TO', 'HNU.TO',
+'HOU.TO', 'HQU.TO', 'HQD.TO', 'BITX', 'IBIT', 'FBTC', 'ETHA', 'TQQQ', 'SQQQ', 'SOXL',
+'SOXS', 'SPXL', 'SPXS', 'LABU', 'LABD', 'FAS', 'FAZ', 'NUGT', 'DUST', 'GDXJ',
+'SILJ', 'URA', 'URNM', 'NLR', 'XLE', 'XOP', 'OIH', 'XBI', 'ARKK', 'ARKG',
+'KWEB', 'FXI', 'EWZ', 'INDA', 'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'TMF',
+'TMV', 'UVXY', 'VXX', 'CVNA', 'CARV', 'CHWY', 'ROKU', 'TTD', 'SNAP', 'PINS',
+'UBER', 'LYFT', 'DASH', 'ABNB', 'DKNG', 'PENN', 'MGM', 'WYNN', 'CCL', 'RCL',
+'NCLH', 'AAL', 'UAL', 'DAL', 'JBLU', 'BA', 'GE', 'CAT', 'DE', 'URI',
+'FCX', 'MP', 'ALB', 'LAC', 'ENPH', 'FSLR', 'RUN', 'SEDG', 'PLUG', 'BE',
+'CHPT', 'QS', 'MVST', 'STEM', 'BBAI', 'SOUN', 'AI', 'PATH', 'U', 'RBLX',
+'TTWO', 'EA', 'MSFT', 'AAPL', 'GOOGL', 'META', 'AMZN', 'NFLX', 'CRM', 'NOW',
+'ADBE', 'ORCL', 'IBM', 'CSCO', 'PYPL', 'V', 'MA', 'JPM', 'BAC', 'GS',
+'MS', 'C', 'WFC', 'SCHW', 'BX', 'KKR', 'APO', 'DIS', 'CMCSA', 'WBD',
+'PARA', 'SPOT', 'LYV', 'MTCH', 'BMBL', 'Z', 'ZG', 'OPEN', 'EXPI', 'RDFN',
+'DOCU', 'ZM', 'TWLO', 'BILL', 'HUBS', 'TOST', 'CAVA', 'BROS', 'CMG', 'MCD',
+'SBUX', 'WING', 'DPZ', 'KO', 'PEP', 'WMT', 'COST', 'TGT', 'HD', 'LOW',
+'LULU', 'NKE', 'ONON', 'DECK', 'CROX', 'GPS', 'ANF', 'AEO', 'RL', 'TPR',
+'VFC', 'M', 'KSS', 'JWN', 'BBY', 'GME', 'AMC', 'KOSS', 'CLOV', 'TLRY',
+'CGC', 'ACB', 'SNDL', 'VRTX', 'REGN', 'MRNA', 'BNTX', 'LLY', 'NVO', 'PFE',
+'JNJ', 'UNH', 'ELV', 'HUM', 'CVS', 'CI', 'ALGN', 'ISRG', 'DXCM', 'PODD',
+'AXON', 'TTMI', 'VRT', 'MOD', 'PWR', 'ETN', 'VST', 'CEG', 'NRG', 'TLN',
+'ABEV.TO', 'TD.TO', 'RY.TO', 'ENB.TO', 'CNQ.TO', 'SU.TO', 'CVE.TO', 'ARX.TO', 'TOU.TO', 'IMO.TO',
+'BNS.TO', 'BMO.TO', 'CM.TO', 'MFC.TO', 'SLF.TO', 'GWO.TO', 'POW.TO', 'BAM.TO', 'BN.TO', 'ATD.TO',
+'DOL.TO', 'WSP.TO', 'QSR.TO', 'TRI.TO', 'CP.TO', 'CNR.TO', 'T.TO', 'BCE.TO', 'RCI-B.TO', 'ENB',
+'CNQ', 'SU', 'SHOP', 'RY', 'TD', 'BAM', 'BN', 'BHP', 'RIO', 'VALE',
+'SQM', 'TECK-B.TO', 'FM.TO', 'CS.TO', 'HBM.TO', 'LUN.TO', 'IVN.TO', 'K.TO', 'AEM.TO', 'ABX.TO',
+'GOLD', 'NEM', 'WPM', 'FNV', 'AGI.TO', 'ELD.TO', 'BTO.TO', 'OR.TO', 'PAAS', 'AG',
+'HL', 'CDE', 'EXK', 'MAG', 'SVM', 'BTG', 'EGO', 'IAG.TO', 'NGD.TO', 'OGC.TO'
+].slice(0, 280);
 
-const DEFAULT_SYMBOLS = [
-// Canadian High-Beta Tech, AI, Crypto & Growth (.TO)
-'SHOP.TO', 'CLS.TO', 'BB.TO', 'LSPD.TO', 'NVEI.TO', 'DCBO.TO', 'KXS.TO', 'CSU.TO',
-'OTEX.TO', 'GIB-A.TO', 'MDA.TO', 'DND.TO', 'WELL.TO', 'CTS.TO', 'BITF.TO', 'HIVE.TO',
-'GLXY.TO', 'HUT.TO', 'DMGI.TO', 'AC.TO', 'CHR.TO', 'BBD-B.TO', 'CAE.TO', 'ATZ.TO',
-'GOOS.TO', 'DOO.TO', 'TFII.TO', 'WSP.TO', 'STN.TO', 'BYD.TO', 'NFI.TO', 'MAXR.TO',
+const CACHE_TTL_MS = 20_000;
+const BATCH_SIZE = 35;
 
-// Canadian Gold, Silver, Copper & Critical Minerals (.TO)
-'K.TO', 'ABX.TO', 'AEM.TO', 'WPM.TO', 'FNV.TO', 'AGI.TO', 'ELD.TO', 'IMG.TO',
-'NGD.TO', 'OR.TO', 'SSRM.TO', 'EQX.TO', 'TXG.TO', 'DPM.TO', 'LUG.TO', 'KNT.TO',
-'SKE.TO', 'SEA.TO', 'NG.TO', 'CXB.TO', 'CG.TO', 'OGC.TO', 'PAAS.TO', 'AG.TO',
-'MAG.TO', 'SVM.TO', 'AYA.TO', 'EDR.TO', 'SIL.TO', 'FM.TO', 'LUN.TO', 'HBM.TO',
-'CS.TO', 'IVN.TO', 'ERO.TO', 'TKO.TO', 'TECK-B.TO', 'FIL.TO', 'NGEX.TO', 'LAC.TO',
-'SGML.TO', 'PMET.TO', 'NTR.TO',
-
-// Canadian Uranium & High-Beta Energy (.TO)
-'CCO.TO', 'DML.TO', 'NXE.TO', 'FCU.TO', 'U-UN.TO', 'EFR.TO', 'ISO.TO', 'GLO.TO',
-'CVE.TO', 'CNQ.TO', 'SU.TO', 'IMO.TO', 'MEG.TO', 'BTE.TO', 'ATH.TO', 'WCP.TO',
-'CPG.TO', 'VET.TO', 'ARX.TO', 'TOU.TO', 'BIR.TO', 'POU.TO', 'PEY.TO', 'NVA.TO',
-'KEL.TO', 'SDE.TO', 'TVE.TO', 'CJ.TO', 'FRU.TO', 'PSK.TO', 'ESI.TO', 'PD.TO',
-'TCW.TO', 'CEU.TO',
-
-// Canadian Leveraged & Sector ETFs (.TO)
-'HQU.TO', 'HXU.TO', 'HEU.TO', 'HGU.TO', 'HNU.TO', 'HOU.TO', 'HURA.TO', 'XEG.TO',
-'XGD.TO', 'XIT.TO', 'ZEB.TO', 'VFV.TO', 'XQQ.TO', 'XIU.TO',
-
-// US High-Beta Semis, AI & Software
-'NVDA', 'AMD', 'SMCI', 'ARM', 'AVGO', 'MU', 'MRVL', 'TSM', 'ASML', 'AMAT',
-'LRCX', 'KLAC', 'QCOM', 'INTC', 'ON', 'MPWR', 'CRDO', 'ALAB', 'PLTR', 'AI',
-'SOUN', 'BBAI', 'PATH', 'SNOW', 'DDOG', 'NET', 'CRWD', 'PANW', 'ZS', 'MDB',
-'APP', 'TTD', 'U', 'RBLX', 'SHOP', 'TWLO', 'DOCN', 'GTLB', 'ESTC', 'IOT',
-
-// US Quantum, Space, Drones, EV & Next-Gen Tech
-'IONQ', 'QBTS', 'RGTI', 'QUBT', 'ARQQ', 'RKLB', 'ASTS', 'LUNR', 'RDW', 'PL',
-'SPCE', 'ACHR', 'JOBY', 'EVTL', 'AVAV', 'KTOS', 'RCAT', 'ONDS', 'TSLA', 'RIVN',
-'LCID', 'NIO', 'XPEV', 'LI', 'QS', 'CHPT', 'BLNK', 'ENVX', 'ENPH', 'SEDG',
-'FSLR', 'RUN', 'SMR', 'OKLO', 'NNE', 'LEU', 'CCJ', 'UEC', 'UUUU', 'DNN',
-
-// US Crypto-Linked & High-Beta Fintech
-'COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'IREN', 'WULF', 'CIFR', 'CORZ', 'BTBT',
-'HUT', 'BITF', 'HOOD', 'SOFI', 'AFRM', 'UPST', 'NU', 'PYPL', 'XYZ', 'MELI',
-
-// US High-Beta Consumer, Biotech, Energy & Leveraged ETFs
-'HIMS', 'CELH', 'DKNG', 'PENN', 'UBER', 'LYFT', 'ABNB', 'DASH', 'CVNA', 'SNAP',
-'PINS', 'ROKU', 'SPOT', 'NFLX', 'CRSP', 'NTLA', 'BEAM', 'VKTX', 'ALT', 'MRNA',
-'BNTX', 'OXY', 'DVN', 'FANG', 'APA', 'HAL', 'SLB', 'FCX', 'SCCO', 'AA',
-'CLF', 'X', 'TQQQ', 'SOXL', 'NVDL', 'TSLL', 'CONL', 'MSTU', 'GDXJ', 'SILJ',
-'XBI', 'ARKK', 'IWM', 'SMH'
-];
-
-let scanCache = {
+let scannerCache = {
+timestamp: 0,
 key: '',
-expiresAt: 0,
-payload: null
+data: null,
 };
 
-function getEtClock(now = new Date()) {
-const etString = now.toLocaleString('en-US', {
+function getSessionPhase(now = new Date()) {
+const estStr = now.toLocaleString('en-US', {
 timeZone: 'America/New_York',
 hour12: false,
+weekday: 'short',
 hour: '2-digit',
-minute: '2-digit'
+minute: '2-digit',
 });
-const [hh, mm] = etString.split(':').map(Number);
-return hh * 60 + mm;
+const [weekday, timePart] = estStr.split(', ');
+if (weekday === 'Sat' || weekday === 'Sun') {
+return 'POST_CLOSE';
 }
+const [hh, mm] = timePart.split(':').map(Number);
+const mins = hh * 60 + mm;
 
-function getSessionPhase(now = new Date()) {
-const mins = getEtClock(now);
-if (mins < 9 * 60 + 35) return 'PRE_BELL';
-if (mins <= 9 * 60 + 50) return 'BELL_935_WINDOW';
-if (mins < 16 * 60) return 'DAY_SESSION';
+if (mins < 570) return 'PRE_BELL'; // before 9:30 AM ET
+if (mins >= 575 && mins <= 600) return 'BELL_935_WINDOW'; // 9:35 AM - 10:00 AM ET
+if (mins > 570 && mins <= 960) return 'DAY_SESSION'; // 9:30 AM - 4:00 PM ET
 return 'POST_CLOSE';
 }
 
-function isRegularDaytime(sessionPhase) {
-return sessionPhase === 'BELL_935_WINDOW' || sessionPhase === 'DAY_SESSION';
+function isRegularDaytime(phase) {
+return phase === 'BELL_935_WINDOW' || phase === 'DAY_SESSION';
 }
 
-function buildFallbackRow(symbol, index) {
-const basePrice = 25 + ((index * 19) % 180) + 0.35;
-return {
-symbol,
-name: symbol,
-price: Number(basePrice.toFixed(2)),
-changePercent: 0,
-intradayMovePct: 0,
-relVol: 1,
-score: Number((15 + ((index * 7) % 20)).toFixed(1)),
-setup: 'WATCH',
-signal: 'MONITOR',
-isCoilPop: false,
-isCoiling: false,
-source: 'fallback'
-};
+function calcMultiDayRangePct(quotes5d30m = []) {
+if (!Array.isArray(quotes5d30m) || quotes5d30m.length < 4) return null;
+const valid = quotes5d30m.filter(
+(q) =>
+q &&
+typeof q.high === 'number' &&
+typeof q.low === 'number' &&
+q.high > 0 &&
+q.low > 0
+);
+if (valid.length < 4) return null;
+const highest = Math.max(...valid.map((q) => q.high));
+const lowest = Math.min(...valid.map((q) => q.low));
+if (!lowest || lowest <= 0) return null;
+return Number((((highest - lowest) / lowest) * 100).toFixed(2));
 }
 
-async function fetchSingleChart(symbol, index, sessionPhase) {
-const controller = new AbortController();
-const timer = setTimeout(() => controller.abort(), 2800);
-
-try {
+async function fetchSingleChart(symbol, sessionPhase) {
+const daytimeActive = isRegularDaytime(sessionPhase);
 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
 symbol
-)}?interval=5m&range=1d`;
+)}?interval=30m&range=5d&includePrePost=false`;
+
+try {
 const res = await fetch(url, {
-signal: controller.signal,
 headers: { 'User-Agent': 'Mozilla/5.0' },
-cache: 'no-store'
+cache: 'no-store',
 });
 
 if (!res.ok) {
-return buildFallbackRow(symbol, index);
+return {
+symbol,
+isFallback: true,
+setup: 'WATCH',
+actionCall: 'SKIP / WATCH',
+profitVerdict: 'NO DATA',
+coilScore: 0,
+setupGrade: '-',
+};
 }
 
 const json = await res.json();
@@ -123,153 +117,268 @@ const result = json?.chart?.result?.[0];
 const meta = result?.meta;
 const quote = result?.indicators?.quote?.[0];
 
-const closes = Array.isArray(quote?.close) ? quote.close : [];
-const rawPrice =
-typeof meta?.regularMarketPrice === 'number'
-? meta.regularMarketPrice
-: [...closes].reverse().find((v) => typeof v === 'number' && v > 0) ?? null;
-
-const prevClose =
-typeof meta?.chartPreviousClose === 'number'
-? meta.chartPreviousClose
-: typeof meta?.previousClose === 'number'
-? meta.previousClose
-: null;
-
-if (typeof rawPrice !== 'number' || !Number.isFinite(rawPrice) || rawPrice <= 0) {
-return buildFallbackRow(symbol, index);
+if (!meta || !quote || !Array.isArray(quote.close) || quote.close.length === 0) {
+return {
+symbol,
+isFallback: true,
+setup: 'WATCH',
+actionCall: 'SKIP / WATCH',
+profitVerdict: 'NO DATA',
+coilScore: 0,
+setupGrade: '-',
+};
 }
 
-const firstValidClose = closes.find((v) => typeof v === 'number' && v > 0);
-const referenceBase =
-typeof prevClose === 'number' && prevClose > 0 ? prevClose : firstValidClose;
+const closes = quote.close.filter((v) => typeof v === 'number' && v > 0);
+const highs = quote.high.filter((v) => typeof v === 'number' && v > 0);
+const lows = quote.low.filter((v) => typeof v === 'number' && v > 0);
+const vols = quote.volume.filter((v) => typeof v === 'number' && v >= 0);
+
+const rawPrice =
+typeof meta.regularMarketPrice === 'number' && meta.regularMarketPrice > 0
+? meta.regularMarketPrice
+: closes[closes.length - 1] || 0;
+
+const prevClose =
+typeof meta.previousClose === 'number' && meta.previousClose > 0
+? meta.previousClose
+: typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
+? meta.chartPreviousClose
+: rawPrice;
+
+if (!rawPrice || rawPrice <= 0) {
+return {
+symbol,
+isFallback: true,
+setup: 'WATCH',
+actionCall: 'SKIP / WATCH',
+profitVerdict: 'NO DATA',
+coilScore: 0,
+setupGrade: '-',
+};
+}
 
 const changePercent =
-typeof referenceBase === 'number' && referenceBase > 0
-? Number((((rawPrice - referenceBase) / referenceBase) * 100).toFixed(2))
-: 0;
+prevClose > 0 ? Number((((rawPrice - prevClose) / prevClose) * 100).toFixed(2)) : 0;
 
-const intradayMovePct =
-typeof firstValidClose === 'number' && firstValidClose > 0
-? Number((((rawPrice - firstValidClose) / firstValidClose) * 100).toFixed(2))
-: changePercent;
+const recentSliceLen = Math.min(6, closes.length);
+const recentHighs = highs.slice(-recentSliceLen);
+const recentLows = lows.slice(-recentSliceLen);
+const recentHigh = recentHighs.length ? Math.max(...recentHighs) : rawPrice;
+const recentLow = recentLows.length ? Math.min(...recentLows) : rawPrice * 0.99;
 
-const highs = Array.isArray(quote?.high) ? quote.high.filter((n) => typeof n === 'number') : [];
-const lows = Array.isArray(quote?.low) ? quote.low.filter((n) => typeof n === 'number') : [];
-const vols = Array.isArray(quote?.volume) ? quote.volume.filter((n) => typeof n === 'number') : [];
-
-const recentHigh = highs.length ? Math.max(...highs.slice(-6)) : rawPrice;
-const recentLow = lows.length ? Math.min(...lows.slice(-6)) : rawPrice;
-const rangePct = rawPrice > 0 ? ((recentHigh - recentLow) / rawPrice) * 100 : 2;
+const rangePct =
+recentLow > 0 ? Number((((recentHigh - recentLow) / recentLow) * 100).toFixed(2)) : 0;
 
 const avgVol =
 vols.length > 1
-? vols.slice(0, -1).reduce((a, b) => a + b, 0) / Math.max(1, vols.length - 1)
-: 1;
-const lastVol = vols.length ? vols[vols.length - 1] : avgVol;
-const relVol = avgVol > 0 ? Number(Math.max(0.2, Math.min(8, lastVol / avgVol)).toFixed(2)) : 1;
+? vols.slice(0, -1).reduce((acc, v) => acc + v, 0) / Math.max(1, vols.length - 1)
+: 0;
+const lastVol = vols.length ? vols[vols.length - 1] : 0;
+const relVol = avgVol > 0 ? Number((lastVol / avgVol).toFixed(2)) : 1.0;
 
-const daytimeActive = isRegularDaytime(sessionPhase);
-const inActiveRange =
-changePercent >= 0 &&
-changePercent <= 3.0 &&
-intradayMovePct >= 0 &&
-intradayMovePct <= 3.0;
-const isCoiling = inActiveRange && rangePct > 0 && rangePct <= 1.05;
+const bars5d = quote.high.map((_, idx) => ({
+high: quote.high[idx],
+low: quote.low[idx],
+}));
+const multiDayRangePct = calcMultiDayRangePct(bars5d);
 
-const inDaytimePopBand =
-(changePercent >= 1.0 && changePercent <= 2.75) ||
-(intradayMovePct >= 1.0 && intradayMovePct <= 2.75);
+const isFallback = false;
+const withinActiveCap = changePercent >= 0 && changePercent <= 3.0;
 
-const isCoilPop =
+const standardCoilPop =
+!isFallback &&
 daytimeActive &&
-inDaytimePopBand &&
-isCoiling &&
-relVol >= 1.3 &&
-intradayMovePct > 0.35;
+withinActiveCap &&
+changePercent >= 1.0 &&
+changePercent <= 2.75 &&
+rangePct <= 1.05 &&
+relVol >= 1.3;
 
-const rawScore =
-(isCoilPop ? 72 : isCoiling && intradayMovePct >= 0.8 ? 50 : 22) +
-Math.min(18, Math.max(0, relVol * 6.5)) +
-(isCoiling ? 9 : 0);
+const isMultiCoil =
+!isFallback &&
+daytimeActive &&
+withinActiveCap &&
+typeof multiDayRangePct === 'number' &&
+multiDayRangePct <= 3.2 &&
+changePercent >= 1.0 &&
+changePercent <= 3.25 &&
+relVol >= 1.15;
+
+const isCoilPop = standardCoilPop || isMultiCoil;
+const isCoiling = !isFallback && withinActiveCap && rangePct <= 1.05;
+
+const setup = isMultiCoil
+? 'MULTI-COIL'
+: isCoilPop
+? 'COIL POP'
+: isCoiling
+? 'COILING'
+: 'WATCH';
+
+// Risk, stop, trim & +5% levels
+const stopCandidate = recentLow > 0 ? recentLow * 0.994 : rawPrice * 0.985;
+const maxRiskFloor = rawPrice * 0.982;
+const stopPrice = Number(Math.max(stopCandidate, maxRiskFloor).toFixed(2));
+const trimPrice = Number((rawPrice * 1.0325).toFixed(2));
+const target5Pct = Number((rawPrice * 1.05).toFixed(2));
+
+const downsideRiskPct =
+rawPrice > 0 && stopPrice < rawPrice
+? Number((((rawPrice - stopPrice) / rawPrice) * 100).toFixed(2))
+: 1.5;
+
+const upsideTo5Pct =
+rawPrice > 0 && target5Pct > rawPrice
+? Number((((target5Pct - rawPrice) / rawPrice) * 100).toFixed(2))
+: 5.0;
+
+const rrRatio =
+downsideRiskPct > 0 ? Number((upsideTo5Pct / downsideRiskPct).toFixed(2)) : 1.0;
+
+const rawRisk =
+25 +
+Math.min(25, Math.max(0, rangePct * 18)) +
+(typeof multiDayRangePct === 'number' ? Math.min(15, multiDayRangePct * 4) : 6) +
+(relVol < 1.15 ? 14 : relVol < 1.3 ? 6 : 0) +
+Math.min(20, Math.max(0, Math.abs(changePercent) * 4.5));
+
+const riskScore = Number(Math.min(99, Math.max(10, rawRisk)).toFixed(0));
+const riskLevel = riskScore >= 70 ? 'HIGH RISK' : riskScore >= 45 ? 'MOD RISK' : 'LOW RISK';
+
+// Quality score for best COIL POP & MULTI-COIL setups
+let coilScore = 0;
+if (isMultiCoil) {
+const baseRange = typeof multiDayRangePct === 'number' ? multiDayRangePct : rangePct;
+const multiTightnessPts = Math.max(0, Math.min(35, (3.2 - baseRange) * 14));
+const multiVolumePts = Math.max(0, Math.min(35, (relVol - 1.0) * 26));
+const popPts = changePercent >= 1.0 && changePercent <= 3.25 ? 18 : 8;
+const rrPts = Math.max(0, Math.min(12, rrRatio * 4));
+coilScore = Math.round(multiTightnessPts + multiVolumePts + popPts + rrPts);
+} else if (standardCoilPop) {
+const tightnessPts = Math.max(0, Math.min(35, (1.05 - rangePct) * 45));
+const volumePts = Math.max(0, Math.min(35, (relVol - 1.0) * 28));
+const sweetSpotPts =
+changePercent >= 1.2 && changePercent <= 2.4 ? 18 : changePercent > 0 ? 10 : 0;
+const rrPts = Math.max(0, Math.min(12, rrRatio * 4));
+coilScore = Math.round(tightnessPts + volumePts + sweetSpotPts + rrPts);
+}
+
+const setupGrade =
+coilScore >= 75 ? 'A+' : coilScore >= 55 ? 'A' : coilScore > 0 ? 'B' : '-';
+
+const actionCall = !daytimeActive
+? 'WAIT (DAYTIME ONLY)'
+: isCoilPop
+? 'BUY / ENTER'
+: isCoiling
+? 'WATCH COIL'
+: 'SKIP / WATCH';
+
+const profitVerdict = !daytimeActive
+? 'WAIT FOR DAYTIME'
+: isCoilPop && rrRatio >= 2.0 && riskScore < 75
+? 'FAVORABLE BUY'
+: isCoilPop && riskScore >= 75
+? 'HIGH-RISK BUY'
+: changePercent >= 4.5
+? 'TAKE / TRAIL PROFIT'
+: changePercent >= 3.0
+? 'TRIM / WATCH EXIT'
+: 'HOLD / WAIT';
 
 return {
 symbol,
-name: meta?.shortName || meta?.longName || symbol,
 price: Number(rawPrice.toFixed(2)),
 changePercent,
-intradayMovePct,
+rangePct,
+multiDayRangePct,
 relVol,
-score: Number(Math.min(99.9, rawScore).toFixed(1)),
-setup: isCoilPop ? 'COIL POP' : isCoiling ? 'COILING' : 'WATCH',
-signal: isCoilPop ? 'EARLY POP' : 'MONITOR',
+isFallback,
 isCoilPop,
+isMultiCoil,
 isCoiling,
-source: 'live'
+setup,
+entryPrice: Number(rawPrice.toFixed(2)),
+stopPrice,
+trimPrice,
+target5Pct,
+downsideRiskPct,
+upsideTo5Pct,
+rrRatio,
+riskScore,
+riskLevel,
+coilScore,
+setupGrade,
+actionCall,
+profitVerdict,
+market: symbol.endsWith('.TO') ? 'CA (.TO)' : 'US (USD)',
 };
 } catch {
-return buildFallbackRow(symbol, index);
-} finally {
-clearTimeout(timer);
+return {
+symbol,
+isFallback: true,
+setup: 'WATCH',
+actionCall: 'SKIP / WATCH',
+profitVerdict: 'ERROR',
+coilScore: 0,
+setupGrade: '-',
+};
 }
-}
-
-async function runInBatches(items, batchSize, worker) {
-const results = [];
-for (let i = 0; i < items.length; i += batchSize) {
-const chunk = items.slice(i, i + batchSize);
-const chunkRes = await Promise.all(chunk.map((item) => worker(item.sym, item.idx)));
-results.push(...chunkRes);
-}
-return results;
 }
 
 export async function GET(request) {
-try {
 const { searchParams } = new URL(request.url);
-const extraParam = searchParams.get('symbols') || '';
-const extraList = extraParam
+const customParam = searchParams.get('symbols');
+const tickers = customParam
+? customParam
 .split(',')
-.map((s) => s.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, ''))
-.filter(Boolean);
-
-const symbols = [...new Set([...extraList, ...DEFAULT_SYMBOLS])].slice(0, 280);
-const cacheKey = symbols.join(',');
-
-if (scanCache.payload && scanCache.key === cacheKey && Date.now() < scanCache.expiresAt) {
-return NextResponse.json(scanCache.payload);
-}
+.map((s) => s.trim().toUpperCase())
+.filter(Boolean)
+.slice(0, 280)
+: DEFAULT_TICKERS;
 
 const sessionPhase = getSessionPhase();
-const indexed = symbols.map((sym, idx) => ({ sym, idx }));
-const rows = await runInBatches(indexed, 35, (sym, idx) =>
-fetchSingleChart(sym, idx, sessionPhase)
-);
+const cacheKey = `${sessionPhase}:${tickers.join(',')}`;
+const now = Date.now();
 
-rows.sort((a, b) => {
+if (scannerCache.data && scannerCache.key === cacheKey && now - scannerCache.timestamp < CACHE_TTL_MS) {
+return NextResponse.json(scannerCache.data);
+}
+
+const rows = [];
+for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
+const chunk = tickers.slice(i, i + BATCH_SIZE);
+const chunkResults = await Promise.all(
+chunk.map((sym) => fetchSingleChart(sym, sessionPhase))
+);
+rows.push(...chunkResults);
+}
+
+const validRows = rows.filter((r) => !r.isFallback);
+
+// Best COIL POP & MULTI-COIL ranked highest by coilScore, then rrRatio
+const rankedRows = [...validRows].sort((a, b) => {
 if (a.isCoilPop !== b.isCoilPop) return a.isCoilPop ? -1 : 1;
-return b.score - a.score;
+if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
+return b.rrRatio - a.rrRatio;
 });
 
 const payload = {
-ok: true,
 sessionPhase,
-totalScanned: rows.length,
+daytimeActive: isRegularDaytime(sessionPhase),
+totalScanned: tickers.length,
+activeCount: validRows.length,
+topCoilSetups: rankedRows.filter((r) => r.isCoilPop).slice(0, 10),
+rows: rankedRows,
 updatedAt: new Date().toISOString(),
-rows
 };
 
-scanCache = {
+scannerCache = {
+timestamp: now,
 key: cacheKey,
-expiresAt: Date.now() + 20_000,
-payload
+data: payload,
 };
 
 return NextResponse.json(payload);
-} catch (err) {
-return NextResponse.json(
-{ ok: false, error: err?.message || 'Scanner failed' },
-{ status: 500 }
-);
-}
 }
