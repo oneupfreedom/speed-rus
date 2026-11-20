@@ -36,6 +36,8 @@ const quote = result?.indicators?.quote?.[0] || {};
 const closes = Array.isArray(quote.close)
 ? quote.close.filter((c) => typeof c === 'number' && Number.isFinite(c) && c > 0)
 : [];
+const highs = Array.isArray(quote.high) ? quote.high : [];
+const lows = Array.isArray(quote.low) ? quote.low : [];
 
 const volumes = Array.isArray(quote.volume)
 ? quote.volume.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0)
@@ -48,7 +50,39 @@ priorBars.length > 0
 ? priorBars.reduce((sum, v) => sum + v, 0) / priorBars.length
 : 0;
 
-// Use prior daily close from series when available, falling back to meta
+const ranges = [];
+const len = Math.min(highs.length, lows.length, quote.close?.length || 0);
+for (let i = 0; i < len; i++) {
+const h = highs[i];
+const l = lows[i];
+const c = quote.close?.[i];
+if (
+typeof h === 'number' &&
+typeof l === 'number' &&
+typeof c === 'number' &&
+Number.isFinite(h) &&
+Number.isFinite(l) &&
+Number.isFinite(c) &&
+c > 0 &&
+h >= l
+) {
+ranges.push(((h - l) / c) * 100);
+}
+}
+
+let isCoiling = false;
+if (ranges.length >= 6) {
+const recentCoilWindow = ranges.slice(-4, -1);
+const earlierBaseWindow = ranges.slice(-9, -4);
+if (recentCoilWindow.length > 0 && earlierBaseWindow.length > 0) {
+const avgRecentRange =
+recentCoilWindow.reduce((sum, r) => sum + r, 0) / recentCoilWindow.length;
+const avgEarlierRange =
+earlierBaseWindow.reduce((sum, r) => sum + r, 0) / earlierBaseWindow.length;
+isCoiling = avgEarlierRange > 0 && avgRecentRange <= avgEarlierRange * 0.85;
+}
+}
+
 const priorDailyClose =
 closes.length >= 2
 ? closes[closes.length - 2]
@@ -83,6 +117,7 @@ prevClose: priorDailyClose,
 changePercent,
 relVol,
 marketCap,
+isCoiling,
 };
 }
 
@@ -113,7 +148,7 @@ const passRelVol = q.relVol >= 1.5;
 const passedCount =
 (passPctBand ? 1 : 0) + (passTorqueCap ? 1 : 0) + (passRelVol ? 1 : 0);
 
-const isPrimeEarlyCoil = passPctBand && passTorqueCap && passRelVol;
+const isPrimeEarlyCoil = Boolean(q.isCoiling) && passPctBand && passTorqueCap && passRelVol;
 
 let setup = 'WATCH';
 let signal = 'WAIT';
@@ -121,7 +156,12 @@ let signal = 'WAIT';
 if (isPrimeEarlyCoil) {
 setup = 'COIL POP';
 signal = 'PRIME ENTRY';
-} else if (q.changePercent >= 1.2 && q.changePercent <= 3.0 && q.relVol >= 1.2) {
+} else if (
+q.isCoiling &&
+q.changePercent >= 1.2 &&
+q.changePercent <= 3.0 &&
+q.relVol >= 1.2
+) {
 setup = 'COIL POP';
 signal = 'WATCH IGNITION';
 } else if (q.changePercent > 3.0) {
@@ -135,6 +175,7 @@ signal = 'CAUTION';
 let score = 40;
 score += Math.max(-15, Math.min(25, q.changePercent * 8));
 score += Math.max(0, Math.min(20, (q.relVol - 1) * 12));
+if (q.isCoiling) score += 10;
 if (passPctBand) score += 10;
 if (passTorqueCap) score += 5;
 if (isPrimeEarlyCoil) score += 10;
