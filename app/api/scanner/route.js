@@ -1,34 +1,63 @@
 
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 60;
+
 const DEFAULT_SYMBOLS = [
-// Canadian Core & Financials (.TO)
-'CNQ.TO', 'TD.TO', 'RY.TO', 'SHOP.TO', 'ENB.TO', 'BMO.TO', 'BNS.TO', 'CM.TO',
-'SU.TO', 'IMO.TO', 'CVE.TO', 'TOU.TO', 'ARX.TO', 'CP.TO', 'CNR.TO', 'MFC.TO',
-'SLF.TO', 'POW.TO', 'BAM.TO', 'BN.TO', 'ATD.TO', 'DOL.TO', 'L.TO', 'QSR.TO',
-'WSP.TO', 'TRI.TO', 'CSU.TO', 'NTR.TO', 'CCO.TO', 'AEM.TO', 'ABX.TO', 'K.TO',
-'FNV.TO', 'WPM.TO', 'HBM.TO', 'FM.TO', 'TECK-B.TO', 'FTS.TO', 'EMA.TO', 'TRP.TO',
-'PPL.TO', 'KEY.TO', 'BCE.TO', 'T.TO', 'RCI-B.TO', 'GIB-A.TO', 'OTEX.TO', 'BB.TO',
-// Canadian ETFs (.TO)
-'XIU.TO', 'XIC.TO', 'VFV.TO', 'XEQT.TO', 'VEQT.TO', 'ZSP.TO', 'XQQ.TO', 'XEG.TO',
-'XGD.TO', 'XFN.TO', 'XIT.TO', 'HURA.TO',
-// US Mega-Cap & Tech
-'NVDA', 'AMD', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'INTC',
-'MU', 'SMCI', 'ARM', 'MRVL', 'QCOM', 'TXN', 'AMAT', 'LRCX', 'ASML', 'TSM',
-'ORCL', 'CRM', 'NOW', 'SNOW', 'PANW', 'CRWD', 'NET', 'DDOG', 'MDB', 'SHOP',
-// US High-Beta, AI, Quantum, Space & Fintech
-'PLTR', 'SOFI', 'RBLX', 'IONQ', 'RKLB', 'HOOD', 'COIN', 'MARA', 'RIOT', 'HIMS',
-'APP', 'CELH', 'DKNG', 'UBER', 'ABNB', 'DASH', 'MSTR', 'AFRM', 'UPST', 'PATH',
-'QBTS', 'RGTI', 'LUNR', 'ASTS', 'JOBY', 'ACHR', 'KTOS', 'AVAV',
-// US Healthcare, Industrials, Energy & Consumer
-'UNH', 'MRK', 'ABBV', 'LLY', 'JNJ', 'PFE', 'AMGN', 'GILD', 'ISRG', 'TMO',
-'JPM', 'BAC', 'GS', 'MS', 'V', 'MA', 'AXP', 'BLK', 'CAT', 'DE',
-'GE', 'RTX', 'LMT', 'NOC', 'BA', 'HON', 'XOM', 'CVX', 'OXY', 'SLB',
-'COST', 'WMT', 'TGT', 'HD', 'LOW', 'MCD', 'SBUX', 'NKE', 'DIS', 'NFLX',
-// US Liquid ETFs
-'SPY', 'QQQ', 'IWM', 'DIA', 'XLK', 'XLF', 'XLE', 'XLV', 'XLI', 'XLC',
-'SMH', 'SOXX', 'GDX', 'KWEB', 'TLT'
+// Canadian High-Beta Tech, AI, Crypto & Growth (.TO)
+'SHOP.TO', 'CLS.TO', 'BB.TO', 'LSPD.TO', 'NVEI.TO', 'DCBO.TO', 'KXS.TO', 'CSU.TO',
+'OTEX.TO', 'GIB-A.TO', 'MDA.TO', 'DND.TO', 'WELL.TO', 'CTS.TO', 'BITF.TO', 'HIVE.TO',
+'GLXY.TO', 'HUT.TO', 'DMGI.TO', 'AC.TO', 'CHR.TO', 'BBD-B.TO', 'CAE.TO', 'ATZ.TO',
+'GOOS.TO', 'DOO.TO', 'TFII.TO', 'WSP.TO', 'STN.TO', 'BYD.TO', 'NFI.TO', 'MAXR.TO',
+
+// Canadian Gold, Silver, Copper & Critical Minerals (.TO)
+'K.TO', 'ABX.TO', 'AEM.TO', 'WPM.TO', 'FNV.TO', 'AGI.TO', 'ELD.TO', 'IMG.TO',
+'NGD.TO', 'OR.TO', 'SSRM.TO', 'EQX.TO', 'TXG.TO', 'DPM.TO', 'LUG.TO', 'KNT.TO',
+'SKE.TO', 'SEA.TO', 'NG.TO', 'CXB.TO', 'CG.TO', 'OGC.TO', 'PAAS.TO', 'AG.TO',
+'MAG.TO', 'SVM.TO', 'AYA.TO', 'EDR.TO', 'SIL.TO', 'FM.TO', 'LUN.TO', 'HBM.TO',
+'CS.TO', 'IVN.TO', 'ERO.TO', 'TKO.TO', 'TECK-B.TO', 'FIL.TO', 'NGEX.TO', 'LAC.TO',
+'SGML.TO', 'PMET.TO', 'NTR.TO',
+
+// Canadian Uranium & High-Beta Energy (.TO)
+'CCO.TO', 'DML.TO', 'NXE.TO', 'FCU.TO', 'U-UN.TO', 'EFR.TO', 'ISO.TO', 'GLO.TO',
+'CVE.TO', 'CNQ.TO', 'SU.TO', 'IMO.TO', 'MEG.TO', 'BTE.TO', 'ATH.TO', 'WCP.TO',
+'CPG.TO', 'VET.TO', 'ARX.TO', 'TOU.TO', 'BIR.TO', 'POU.TO', 'PEY.TO', 'NVA.TO',
+'KEL.TO', 'SDE.TO', 'TVE.TO', 'CJ.TO', 'FRU.TO', 'PSK.TO', 'ESI.TO', 'PD.TO',
+'TCW.TO', 'CEU.TO',
+
+// Canadian Leveraged & Sector ETFs (.TO)
+'HQU.TO', 'HXU.TO', 'HEU.TO', 'HGU.TO', 'HNU.TO', 'HOU.TO', 'HURA.TO', 'XEG.TO',
+'XGD.TO', 'XIT.TO', 'ZEB.TO', 'VFV.TO', 'XQQ.TO', 'XIU.TO',
+
+// US High-Beta Semis, AI & Software
+'NVDA', 'AMD', 'SMCI', 'ARM', 'AVGO', 'MU', 'MRVL', 'TSM', 'ASML', 'AMAT',
+'LRCX', 'KLAC', 'QCOM', 'INTC', 'ON', 'MPWR', 'CRDO', 'ALAB', 'PLTR', 'AI',
+'SOUN', 'BBAI', 'PATH', 'SNOW', 'DDOG', 'NET', 'CRWD', 'PANW', 'ZS', 'MDB',
+'APP', 'TTD', 'U', 'RBLX', 'SHOP', 'TWLO', 'DOCN', 'GTLB', 'ESTC', 'IOT',
+
+// US Quantum, Space, Drones, EV & Next-Gen Tech
+'IONQ', 'QBTS', 'RGTI', 'QUBT', 'ARQQ', 'RKLB', 'ASTS', 'LUNR', 'RDW', 'PL',
+'SPCE', 'ACHR', 'JOBY', 'EVTL', 'AVAV', 'KTOS', 'RCAT', 'ONDS', 'TSLA', 'RIVN',
+'LCID', 'NIO', 'XPEV', 'LI', 'QS', 'CHPT', 'BLNK', 'ENVX', 'ENPH', 'SEDG',
+'FSLR', 'RUN', 'SMR', 'OKLO', 'NNE', 'LEU', 'CCJ', 'UEC', 'UUUU', 'DNN',
+
+// US Crypto-Linked & High-Beta Fintech
+'COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'IREN', 'WULF', 'CIFR', 'CORZ', 'BTBT',
+'HUT', 'BITF', 'HOOD', 'SOFI', 'AFRM', 'UPST', 'NU', 'PYPL', 'XYZ', 'MELI',
+
+// US High-Beta Consumer, Biotech, Energy & Leveraged ETFs
+'HIMS', 'CELH', 'DKNG', 'PENN', 'UBER', 'LYFT', 'ABNB', 'DASH', 'CVNA', 'SNAP',
+'PINS', 'ROKU', 'SPOT', 'NFLX', 'CRSP', 'NTLA', 'BEAM', 'VKTX', 'ALT', 'MRNA',
+'BNTX', 'OXY', 'DVN', 'FANG', 'APA', 'HAL', 'SLB', 'FCX', 'SCCO', 'AA',
+'CLF', 'X', 'TQQQ', 'SOXL', 'NVDL', 'TSLL', 'CONL', 'MSTU', 'GDXJ', 'SILJ',
+'XBI', 'ARKK', 'IWM', 'SMH'
 ];
+
+let scanCache = {
+key: '',
+expiresAt: 0,
+payload: null
+};
 
 function getEtClock(now = new Date()) {
 const etString = now.toLocaleString('en-US', {
@@ -62,7 +91,7 @@ price: Number(basePrice.toFixed(2)),
 changePercent: 0,
 intradayMovePct: 0,
 relVol: 1,
-score: Number((20 + ((index * 7) % 25)).toFixed(1)),
+score: Number((15 + ((index * 7) % 20)).toFixed(1)),
 setup: 'WATCH',
 signal: 'MONITOR',
 isCoilPop: false,
@@ -73,7 +102,7 @@ source: 'fallback'
 
 async function fetchSingleChart(symbol, index, sessionPhase) {
 const controller = new AbortController();
-const timer = setTimeout(() => controller.abort(), 3500);
+const timer = setTimeout(() => controller.abort(), 2800);
 
 try {
 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
@@ -141,10 +170,13 @@ const lastVol = vols.length ? vols[vols.length - 1] : avgVol;
 const relVol = avgVol > 0 ? Number(Math.max(0.2, Math.min(8, lastVol / avgVol)).toFixed(2)) : 1;
 
 const daytimeActive = isRegularDaytime(sessionPhase);
-const isCoiling = rangePct > 0 && rangePct <= 1.05;
+const constructiveTrend = intradayMovePct >= 0 || changePercent >= -0.15;
+const isCoiling = constructiveTrend && rangePct > 0 && rangePct <= 1.05;
+
 const inDaytimePopBand =
 (changePercent >= 1.0 && changePercent <= 2.75) ||
 (intradayMovePct >= 1.0 && intradayMovePct <= 2.75);
+
 const isCoilPop =
 daytimeActive &&
 inDaytimePopBand &&
@@ -197,10 +229,16 @@ const extraList = extraParam
 .map((s) => s.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, ''))
 .filter(Boolean);
 
-const symbols = [...new Set([...extraList, ...DEFAULT_SYMBOLS])].slice(0, 140);
+const symbols = [...new Set([...extraList, ...DEFAULT_SYMBOLS])].slice(0, 280);
+const cacheKey = symbols.join(',');
+
+if (scanCache.payload && scanCache.key === cacheKey && Date.now() < scanCache.expiresAt) {
+return NextResponse.json(scanCache.payload);
+}
+
 const sessionPhase = getSessionPhase();
 const indexed = symbols.map((sym, idx) => ({ sym, idx }));
-const rows = await runInBatches(indexed, 20, (sym, idx) =>
+const rows = await runInBatches(indexed, 35, (sym, idx) =>
 fetchSingleChart(sym, idx, sessionPhase)
 );
 
@@ -209,12 +247,21 @@ if (a.isCoilPop !== b.isCoilPop) return a.isCoilPop ? -1 : 1;
 return b.score - a.score;
 });
 
-return NextResponse.json({
+const payload = {
 ok: true,
 sessionPhase,
+totalScanned: rows.length,
 updatedAt: new Date().toISOString(),
 rows
-});
+};
+
+scanCache = {
+key: cacheKey,
+expiresAt: Date.now() + 20_000,
+payload
+};
+
+return NextResponse.json(payload);
 } catch (err) {
 return NextResponse.json(
 { ok: false, error: err?.message || 'Scanner failed' },
