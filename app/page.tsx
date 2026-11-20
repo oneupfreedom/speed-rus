@@ -98,21 +98,10 @@ if (!q) return true;
 return (
 row.symbol.toUpperCase().includes(q) ||
 (row.name || '').toUpperCase().includes(q) ||
-row.setup.toUpperCase().includes(q) ||
-(row.source || '').toUpperCase().includes(q)
+row.setup.toUpperCase().includes(q)
 );
 });
 }, [rows, filterText, coilPopOnly, primeBandOnly]);
-
-const liveCount = useMemo(
-() => rows.filter((r) => r.source === 'live').length,
-[rows]
-);
-
-const fallbackCount = useMemo(
-() => rows.filter((r) => r.source !== 'live').length,
-[rows]
-);
 
 const spotlight = useMemo(() => {
 return rows.find((r) => r.isCoilPop) || rows[0] || null;
@@ -160,9 +149,6 @@ Coil Pop Early-Ignition Scanner
 <span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-900/80 border border-blue-600/50 text-cyan-200">
 {PHASE_LABELS[sessionPhase] || sessionPhase}
 </span>
-<span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-900/90 border border-slate-700 text-blue-100">
-LIVE: {liveCount} • FALLBACK: {fallbackCount}
-</span>
 <span className="text-xs text-blue-200/80">
 Auto-Sync (30s): {lastSync || 'Syncing...'}
 </span>
@@ -179,20 +165,9 @@ className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-cyan-500 hover:bg-c
 {lockedRow && (
 <div className="rounded-xl bg-slate-900/90 border border-cyan-500/50 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 <div>
-<div className="flex flex-wrap items-center gap-2">
-<span className="text-xs uppercase tracking-wider text-cyan-300 font-semibold">
+<div className="text-xs uppercase tracking-wider text-cyan-300 font-semibold">
 LOCKED ACTIVE POSITION: {lockedRow.symbol} • +5% GOAL: $
 {(lockedRow.price * 1.05).toFixed(2)}
-</span>
-<span
-className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-lockedRow.source === 'live'
-? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/40'
-: 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
-}`}
->
-{lockedRow.source === 'live' ? 'LIVE' : 'FALLBACK'}
-</span>
 </div>
 <div className="text-sm mt-1">
 Current: <strong>${lockedRow.price.toFixed(2)}</strong> (
@@ -226,19 +201,8 @@ UNLOCK
 {spotlight && (
 <section className="rounded-xl bg-gradient-to-r from-blue-950 via-blue-900/80 to-slate-900 border border-blue-600/50 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 <div>
-<div className="flex flex-wrap items-center gap-2">
-<span className="text-xs uppercase tracking-wider text-cyan-300 font-bold">
+<div className="text-xs uppercase tracking-wider text-cyan-300 font-bold">
 COIL POP SPOTLIGHT • +5% TARGET: ${(spotlight.price * 1.05).toFixed(2)}
-</span>
-<span
-className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-spotlight.source === 'live'
-? 'bg-emerald-400 text-slate-950'
-: 'bg-amber-400 text-slate-950'
-}`}
->
-{spotlight.source === 'live' ? 'LIVE DATA' : 'FALLBACK DATA'}
-</span>
 </div>
 <div className="text-lg md:text-xl font-bold mt-1">
 {spotlight.symbol}{' '}
@@ -297,7 +261,7 @@ className="px-4 py-2 rounded-lg text-xs font-bold bg-cyan-500 hover:bg-cyan-400 
 type="text"
 value={filterText}
 onChange={(e) => setFilterText(e.target.value)}
-placeholder="Filter by ticker, company, COIL POP, LIVE, or FALLBACK..."
+placeholder="Filter by ticker, company, or COIL POP..."
 className="flex-1 rounded-lg bg-[#07132b] border border-blue-700/70 px-3.5 py-2 text-sm text-white placeholder:text-blue-300/50 focus:outline-none focus:border-cyan-400"
 />
 <div className="flex gap-2">
@@ -332,7 +296,6 @@ PRIME 1.5–2.35% ONLY
 <thead>
 <tr className="border-b border-blue-800/70 text-[11px] uppercase tracking-wider text-blue-300/80">
 <th className="py-3 px-4">Ticker</th>
-<th className="py-3 px-4">Source</th>
 <th className="py-3 px-4">Price / Chg</th>
 <th className="py-3 px-4">+5% Target</th>
 <th className="py-3 px-4">Rel Vol</th>
@@ -345,7 +308,6 @@ PRIME 1.5–2.35% ONLY
 <tbody className="divide-y divide-blue-900/60">
 {filteredRows.map((row) => {
 const isLocked = lockedSymbol === row.symbol;
-const isLive = row.source === 'live';
 return (
 <tr
 key={row.symbol}
@@ -362,17 +324,6 @@ isLocked
 <div className="text-xs text-blue-300/70 truncate max-w-[180px]">
 {row.name || row.symbol}
 </div>
-</td>
-<td className="py-3 px-4">
-<span
-className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-isLive
-? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-: 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-}`}
->
-{isLive ? 'LIVE' : 'FALLBACK'}
-</span>
 </td>
 <td className="py-3 px-4">
 <div className="font-semibold">
@@ -443,7 +394,7 @@ isLocked
 {filteredRows.length === 0 && (
 <tr>
 <td
-colSpan={9}
+colSpan={8}
 className="py-8 px-4 text-center text-blue-300/70"
 >
 No matching tickers for current filter.
