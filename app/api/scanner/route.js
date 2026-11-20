@@ -12,7 +12,7 @@ const DEFAULT_WATCHLIST = [
 
 async function fetchSingleChart(symbol) {
 const encoded = encodeURIComponent(symbol);
-const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1m&range=1d`;
+const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1d&range=1mo`;
 
 const response = await fetch(url, {
 headers: {
@@ -28,16 +28,31 @@ throw new Error(`Chart status ${response.status} for ${symbol}`);
 }
 
 const data = await response.json();
-const meta = data?.chart?.result?.[0]?.meta;
+const result = data?.chart?.result?.[0];
+const meta = result?.meta;
 if (!meta) return null;
+
+const volumes = Array.isArray(result?.indicators?.quote?.[0]?.volume)
+? result.indicators.quote[0].volume.filter((v) => typeof v === 'number' && v > 0)
+: [];
+
+const latestBarVol = volumes.length > 0 ? volumes[volumes.length - 1] : 0;
+const priorBars = volumes.length > 1 ? volumes.slice(0, -1) : volumes;
+const computedAvgVol =
+priorBars.length > 0
+? priorBars.reduce((sum, v) => sum + v, 0) / priorBars.length
+: 0;
 
 const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? 0);
 const prevClose = Number(
 meta.chartPreviousClose ?? meta.previousClose ?? price
 );
-const volume = Number(meta.regularMarketVolume ?? 0);
+const volume = Number(meta.regularMarketVolume ?? latestBarVol ?? 0);
 const avgVol = Number(
-meta.averageDailyVolume3Month ?? meta.averageDailyVolume10Day ?? 0
+meta.averageDailyVolume3Month ??
+meta.averageDailyVolume10Day ??
+computedAvgVol ??
+0
 );
 const marketCap = Number(meta.marketCap ?? 0);
 
@@ -45,7 +60,7 @@ if (!price || price <= 0) return null;
 
 const changePercent =
 prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
-const relVol = avgVol > 0 ? volume / avgVol : 1;
+const relVol = avgVol > 0 && volume > 0 ? volume / avgVol : 1;
 
 return {
 symbol: meta.symbol || symbol,
@@ -75,7 +90,6 @@ return quotes;
 }
 
 function evaluateRow(q) {
-// 3-Point Check for early COIL POP entry
 const passPctBand = q.changePercent >= 1.5 && q.changePercent <= 2.35;
 const passTorqueCap =
 q.price >= 5 &&
