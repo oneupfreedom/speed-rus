@@ -1,409 +1,319 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-interface ScannerRow {
+type ScannerRow = {
 symbol: string;
-name?: string;
 price: number;
 changePercent: number;
+rangePct: number;
+multiDayRangePct: number | null;
 relVol: number;
-score: number;
-setup: string;
-signal: string;
+isFallback?: boolean;
 isCoilPop?: boolean;
+isMultiCoil?: boolean;
 isCoiling?: boolean;
-source?: 'live' | 'fallback' | string;
-}
-
-const PHASE_LABELS: Record<string, string> = {
-PRE_BELL: 'PRE-BELL (< 9:35 AM ET)',
-BELL_935_WINDOW: '9:35 AM ET BELL WINDOW',
-DAY_SESSION: 'ACTIVE SESSION (9:35 AM - 4:00 PM ET)',
-POST_CLOSE: 'POST-CLOSE'
+setup: string;
+entryPrice?: number;
+stopPrice?: number;
+trimPrice?: number;
+target5Pct?: number;
+downsideRiskPct?: number;
+upsideTo5Pct?: number;
+rrRatio?: number;
+riskScore?: number;
+riskLevel?: string;
+coilScore?: number;
+setupGrade?: string;
+actionCall?: string;
+profitVerdict?: string;
+market?: string;
 };
 
-export default function ScannerPage() {
-const [rows, setRows] = useState<ScannerRow[]>([]);
-const [sessionPhase, setSessionPhase] = useState<string>('BELL_935_WINDOW');
-const [filterText, setFilterText] = useState<string>('');
-const [customInput, setCustomInput] = useState<string>('');
-const [customTickers, setCustomTickers] = useState<string[]>([]);
-const [coilPopOnly, setCoilPopOnly] = useState<boolean>(false);
-const [primeBandOnly, setPrimeBandOnly] = useState<boolean>(false);
-const [lockedSymbol, setLockedSymbol] = useState<string | null>(null);
-const [lastSync, setLastSync] = useState<string>('');
-const [loading, setLoading] = useState<boolean>(false);
+type ScannerResponse = {
+sessionPhase: string;
+daytimeActive: boolean;
+totalScanned: number;
+activeCount: number;
+topCoilSetups: ScannerRow[];
+rows: ScannerRow[];
+updatedAt: string;
+};
 
-const fetchScanner = useCallback(async (extraList: string[]) => {
+export default function CoilPopScannerPage() {
+const [customTickers, setCustomTickers] = useState('');
+const [filterText, setFilterText] = useState('');
+const [onlySetups, setOnlySetups] = useState(false);
+const [data, setData] = useState<ScannerResponse | null>(null);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState<string | null>(null);
+
+const loadScanner = async (symbolsOverride?: string) => {
 setLoading(true);
+setError(null);
 try {
-const query =
-extraList.length > 0
-? `?symbols=${encodeURIComponent(extraList.join(','))}`
-: '';
-const res = await fetch(`/api/scanner${query}`, { cache: 'no-store' });
-const data = await res.json();
-if (data?.ok && Array.isArray(data.rows)) {
-setRows(data.rows);
-if (data.sessionPhase) setSessionPhase(data.sessionPhase);
-const timeStr = new Date().toLocaleTimeString([], {
-hour: '2-digit',
-minute: '2-digit',
-second: '2-digit'
-});
-setLastSync(timeStr);
-}
-} catch {
-// Keep existing rows on transient network hiccup
+const cleaned = (symbolsOverride ?? customTickers)
+.split(',')
+.map((s) => s.trim().toUpperCase())
+.filter(Boolean)
+.join(',');
+const qs = cleaned ? `?symbols=${encodeURIComponent(cleaned)}` : '';
+const res = await fetch(`/api/scanner${qs}`, { cache: 'no-store' });
+if (!res.ok) throw new Error(`Request failed (${res.status})`);
+const json: ScannerResponse = await res.json();
+setData(json);
+} catch (err: unknown) {
+setError(err instanceof Error ? err.message : 'Failed to load scanner');
 } finally {
 setLoading(false);
 }
-}, []);
-
-useEffect(() => {
-fetchScanner(customTickers);
-const interval = setInterval(() => {
-fetchScanner(customTickers);
-}, 30000);
-return () => clearInterval(interval);
-}, [fetchScanner, customTickers]);
-
-const handleAddTickers = (e: React.FormEvent) => {
-e.preventDefault();
-const parsed = customInput
-.split(',')
-.map((s) => s.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, ''))
-.filter(Boolean);
-
-if (parsed.length === 0) return;
-
-const merged = [...new Set([...parsed, ...customTickers])].slice(0, 30);
-setCustomTickers(merged);
-setCustomInput('');
 };
 
+useEffect(() => {
+loadScanner('');
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 const filteredRows = useMemo(() => {
+const list = data?.rows ?? [];
 const q = filterText.trim().toUpperCase();
-return rows.filter((row) => {
-if (coilPopOnly && !row.isCoilPop) return false;
-if (
-primeBandOnly &&
-(row.changePercent < 1.5 || row.changePercent > 2.35)
-) {
-return false;
-}
+
+return list.filter((row) => {
+if (onlySetups && !row.isCoilPop) return false;
 if (!q) return true;
 return (
 row.symbol.toUpperCase().includes(q) ||
-(row.name || '').toUpperCase().includes(q) ||
-row.setup.toUpperCase().includes(q)
+row.setup.toUpperCase().includes(q) ||
+(row.profitVerdict || '').toUpperCase().includes(q) ||
+(row.setupGrade || '').toUpperCase().includes(q) ||
+(row.market || '').toUpperCase().includes(q)
 );
 });
-}, [rows, filterText, coilPopOnly, primeBandOnly]);
+}, [data, filterText, onlySetups]);
 
-const spotlight = useMemo(() => {
-return rows.find((r) => r.isCoilPop) || rows[0] || null;
-}, [rows]);
-
-const lockedRow = useMemo(() => {
-if (!lockedSymbol) return null;
-return rows.find((r) => r.symbol === lockedSymbol) || null;
-}, [rows, lockedSymbol]);
-
-const lockedStalled = useMemo(() => {
-if (!lockedRow) return false;
-return lockedRow.changePercent < 0.85 || lockedRow.relVol < 1.0;
-}, [lockedRow]);
-
-const overtakenByCoil = useMemo(() => {
-if (!lockedRow) return null;
-return (
-rows.find(
-(r) =>
-r.symbol !== lockedRow.symbol &&
-r.isCoilPop &&
-r.changePercent >= lockedRow.changePercent + 1.2
-) || null
-);
-}, [rows, lockedRow]);
+const topPicks = useMemo(() => {
+return (data?.topCoilSetups ?? []).slice(0, 6);
+}, [data]);
 
 return (
-<main className="min-h-screen bg-[#07132b] text-white p-4 md:p-8 font-sans">
-<div className="max-w-6xl mx-auto space-y-6">
-<header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-blue-800/60 pb-5">
+<main className="min-h-screen bg-[#071a3a] text-white p-4 md:p-6">
+<div className="max-w-7xl mx-auto space-y-5">
+{/* Header */}
+<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 <div>
 <p className="text-xs uppercase tracking-widest text-cyan-300 font-semibold">
-COIL-TO-COIL MOMENTUM CO-PILOT • +5% UPSIDE TARGET
+Coil-to-Coil Momentum Co-Pilot • +5% Upside Target
 </p>
-<h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1">
+<h1 className="text-2xl md:text-3xl font-bold tracking-tight">
 Coil Pop Early-Ignition Scanner
 </h1>
-<p className="text-sm text-blue-200/80 mt-1">
-9:35 AM ET bell ignition • +1.0% to +2.35% pop band • Range coil + volume confirmation
+<p className="text-xs md:text-sm text-blue-200 mt-1">
+9:35 AM ET bell ignition • +1.0% to +2.75% pop band (up to +3.25% multi-coil) • Range coil + volume + risk/R:R check
 </p>
 </div>
 
-<div className="flex flex-wrap items-center gap-3">
-<span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-900/80 border border-blue-600/50 text-cyan-200">
-{PHASE_LABELS[sessionPhase] || sessionPhase}
-</span>
-<span className="text-xs text-blue-200/80">
-Auto-Sync (30s): {lastSync || 'Syncing...'}
+<div className="flex items-center gap-2 self-start md:self-auto">
+<span className="px-3 py-1.5 rounded-lg bg-blue-900/80 border border-cyan-400/30 text-xs font-semibold text-cyan-200">
+{data?.sessionPhase || 'CHECKING SESSION'}
 </span>
 <button
 type="button"
-onClick={() => fetchScanner(customTickers)}
-className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition"
+onClick={() => loadScanner()}
+className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition"
 >
-{loading ? 'SYNCING...' : 'REFRESH'}
+{loading ? 'Scanning...' : 'Refresh'}
 </button>
 </div>
-</header>
-
-{lockedRow && (
-<div className="rounded-xl bg-slate-900/90 border border-cyan-500/50 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-<div>
-<div className="text-xs uppercase tracking-wider text-cyan-300 font-semibold">
-LOCKED ACTIVE POSITION: {lockedRow.symbol} • +5% GOAL: $
-{(lockedRow.price * 1.05).toFixed(2)}
-</div>
-<div className="text-sm mt-1">
-Current: <strong>${lockedRow.price.toFixed(2)}</strong> (
-{lockedRow.changePercent >= 0 ? '+' : ''}
-{lockedRow.changePercent.toFixed(2)}%) • Rel Vol:{' '}
-<strong>{lockedRow.relVol.toFixed(2)}x</strong>
-</div>
-{lockedStalled && (
-<div className="text-xs text-amber-300 font-semibold mt-1">
-WARNING: Momentum stalling on {lockedRow.symbol} (check % gain &amp; relative volume).
-</div>
-)}
-{overtakenByCoil && (
-<div className="text-xs text-emerald-300 font-semibold mt-1">
-FASTER COIL DETECTED: {overtakenByCoil.symbol} (
-+{overtakenByCoil.changePercent.toFixed(2)}%) is +1.2% ahead of{' '}
-{lockedRow.symbol}.
-</div>
-)}
-</div>
-<button
-type="button"
-onClick={() => setLockedSymbol(null)}
-className="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600"
->
-UNLOCK
-</button>
-</div>
-)}
-
-{spotlight && (
-<section className="rounded-xl bg-gradient-to-r from-blue-950 via-blue-900/80 to-slate-900 border border-blue-600/50 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-<div>
-<div className="text-xs uppercase tracking-wider text-cyan-300 font-bold">
-COIL POP SPOTLIGHT • +5% TARGET: ${(spotlight.price * 1.05).toFixed(2)}
-</div>
-<div className="text-lg md:text-xl font-bold mt-1">
-{spotlight.symbol}{' '}
-<span className="font-normal text-blue-100">
-(${spotlight.price.toFixed(2)} •{' '}
-{spotlight.changePercent >= 0 ? '+' : ''}
-{spotlight.changePercent.toFixed(2)}% •{' '}
-{spotlight.relVol.toFixed(2)}x Rel Vol)
-</span>
-</div>
-<div className="text-xs text-blue-200 mt-1">
-Setup: <strong>{spotlight.setup}</strong> • Signal:{' '}
-<strong>{spotlight.signal}</strong> • Score:{' '}
-<strong>{spotlight.score}</strong>
-</div>
 </div>
 
-<button
-type="button"
-onClick={() =>
-setLockedSymbol(
-lockedSymbol === spotlight.symbol ? null : spotlight.symbol
-)
-}
-className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition shrink-0"
->
-{lockedSymbol === spotlight.symbol
-? `UNLOCK ${spotlight.symbol}`
-: `LOCK ${spotlight.symbol}`}
-</button>
-</section>
-)}
-
-<section className="rounded-xl bg-[#0b1d3f] border border-blue-800/60 p-4 space-y-3">
-<form
-onSubmit={handleAddTickers}
-className="flex flex-col sm:flex-row gap-2.5"
->
+{/* Controls */}
+<div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-950/60 border border-blue-400/20 p-3.5 rounded-xl">
+<div className="flex gap-2">
 <input
 type="text"
-value={customInput}
-onChange={(e) => setCustomInput(e.target.value)}
+value={customTickers}
+onChange={(e) => setCustomTickers(e.target.value)}
 placeholder="Add custom tickers (e.g. SOFI, RKLB, IONQ, RY.TO)..."
-className="flex-1 rounded-lg bg-[#07132b] border border-blue-700/70 px-3.5 py-2 text-sm text-white placeholder:text-blue-300/50 focus:outline-none focus:border-cyan-400"
+className="w-full rounded-lg bg-blue-900/50 border border-blue-400/30 px-3 py-2 text-sm text-white placeholder:text-blue-300/70 focus:outline-none focus:border-cyan-400"
 />
 <button
-type="submit"
-className="px-4 py-2 rounded-lg text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition"
+type="button"
+onClick={() => loadScanner(customTickers)}
+className="px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-xs font-semibold shrink-0"
 >
-+ ADD TICKER
+Scan
 </button>
-</form>
+</div>
 
-<div className="flex flex-col md:flex-row gap-2.5">
 <input
 type="text"
 value={filterText}
 onChange={(e) => setFilterText(e.target.value)}
-placeholder="Filter by ticker, company, or COIL POP..."
-className="flex-1 rounded-lg bg-[#07132b] border border-blue-700/70 px-3.5 py-2 text-sm text-white placeholder:text-blue-300/50 focus:outline-none focus:border-cyan-400"
+placeholder="Filter by ticker, COIL POP, MULTI-COIL, A+, verdict..."
+className="w-full rounded-lg bg-blue-900/50 border border-blue-400/30 px-3 py-2 text-sm text-white placeholder:text-blue-300/70 focus:outline-none focus:border-cyan-400"
 />
-<div className="flex gap-2">
-<button
-type="button"
-onClick={() => setCoilPopOnly((v) => !v)}
-className={`px-3.5 py-2 rounded-lg text-xs font-bold border transition ${
-coilPopOnly
-? 'bg-amber-400 text-slate-950 border-amber-300'
-: 'bg-[#07132b] text-blue-100 border-blue-700/70 hover:border-cyan-400'
-}`}
->
-COIL POP ONLY
-</button>
-<button
-type="button"
-onClick={() => setPrimeBandOnly((v) => !v)}
-className={`px-3.5 py-2 rounded-lg text-xs font-bold border transition ${
-primeBandOnly
-? 'bg-cyan-400 text-slate-950 border-cyan-300'
-: 'bg-[#07132b] text-blue-100 border-blue-700/70 hover:border-cyan-400'
-}`}
->
-PRIME 1.5–2.35% ONLY
-</button>
+
+<div className="flex items-center justify-between px-2 text-xs text-blue-200">
+<label className="flex items-center gap-2 cursor-pointer select-none">
+<input
+type="checkbox"
+checked={onlySetups}
+onChange={(e) => setOnlySetups(e.target.checked)}
+className="rounded border-blue-400"
+/>
+<span>Only active COIL POP / MULTI-COIL</span>
+</label>
+<span>
+Active: <strong>{data?.activeCount ?? 0}</strong> / {data?.totalScanned ?? 0}
+</span>
 </div>
+</div>
+
+{/* Top Ranked Coil Setups */}
+{topPicks.length > 0 && (
+<section className="bg-blue-950/50 border border-cyan-400/25 rounded-xl p-4">
+<h2 className="text-sm font-bold uppercase tracking-wider text-cyan-300 mb-3">
+Top Ranked COIL POP & MULTI-COIL Setups
+</h2>
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+{topPicks.map((pick) => (
+<div
+key={pick.symbol}
+className="rounded-lg bg-blue-900/45 border border-blue-300/20 p-3 space-y-1.5"
+>
+<div className="flex items-center justify-between">
+<span className="font-bold text-base">
+{pick.symbol}{' '}
+<span className="text-[11px] font-normal text-blue-300">
+({pick.market || 'US'})
+</span>
+</span>
+<span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 text-xs font-bold">
+{pick.setupGrade || '-'} • {pick.coilScore ?? 0}
+</span>
+</div>
+<div className="flex items-center justify-between text-xs text-blue-100">
+<span>
+${pick.price?.toFixed(2)} (
+<strong className={pick.changePercent >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+{pick.changePercent > 0 ? `+${pick.changePercent}%` : `${pick.changePercent}%`}
+</strong>
+)
+</span>
+<span className="font-semibold text-amber-200">{pick.profitVerdict}</span>
+</div>
+<div className="grid grid-cols-3 gap-1 pt-1 text-[11px] text-blue-200 border-t border-blue-400/15">
+<div>Stop: <strong>${pick.stopPrice?.toFixed(2)}</strong></div>
+<div>Trim: <strong>${pick.trimPrice?.toFixed(2)}</strong></div>
+<div>+5%: <strong>${pick.target5Pct?.toFixed(2)}</strong></div>
+</div>
+<div className="flex items-center justify-between text-[11px] text-blue-300">
+<span>R:R <strong>{pick.rrRatio ?? '-'}x</strong></span>
+<span>Risk <strong>{pick.riskScore ?? '-'}</strong> ({pick.riskLevel || '-'})</span>
+</div>
+</div>
+))}
 </div>
 </section>
+)}
 
-<section className="rounded-xl bg-[#0b1d3f] border border-blue-800/60 overflow-x-auto">
-<table className="w-full text-left border-collapse text-sm">
+{/* Main Scanner Table */}
+<div className="bg-blue-950/60 border border-blue-400/20 rounded-xl overflow-x-auto">
+<table className="w-full text-left border-collapse text-xs md:text-sm">
 <thead>
-<tr className="border-b border-blue-800/70 text-[11px] uppercase tracking-wider text-blue-300/80">
-<th className="py-3 px-4">Ticker</th>
-<th className="py-3 px-4">Price / Chg</th>
-<th className="py-3 px-4">+5% Target</th>
-<th className="py-3 px-4">Rel Vol</th>
-<th className="py-3 px-4">Score</th>
-<th className="py-3 px-4">Setup</th>
-<th className="py-3 px-4">Signal</th>
-<th className="py-3 px-4 text-right">Action</th>
+<tr className="border-b border-blue-400/20 text-[11px] uppercase tracking-wider text-blue-200 bg-blue-900/40">
+<th className="py-3 px-3">Ticker</th>
+<th className="py-3 px-3">Price / Chg</th>
+<th className="py-3 px-3">Stop / Trim / +5%</th>
+<th className="py-3 px-3">Rel Vol</th>
+<th className="py-3 px-3">Grade / Score</th>
+<th className="py-3 px-3">Risk / R:R</th>
+<th className="py-3 px-3">Setup</th>
+<th className="py-3 px-3">Verdict</th>
 </tr>
 </thead>
-<tbody className="divide-y divide-blue-900/60">
-{filteredRows.map((row) => {
-const isLocked = lockedSymbol === row.symbol;
-return (
+<tbody>
+{error ? (
+<tr>
+<td colSpan={8} className="py-8 text-center text-rose-300">
+{error}
+</td>
+</tr>
+) : filteredRows.length === 0 ? (
+<tr>
+<td colSpan={8} className="py-10 text-center text-blue-200">
+{loading
+? 'Loading scanner rows...'
+: 'No matching tickers for current filter.'}
+</td>
+</tr>
+) : (
+filteredRows.map((row) => (
 <tr
 key={row.symbol}
+className="border-b border-blue-400/10 hover:bg-blue-900/35 transition"
+>
+<td className="py-2.5 px-3 font-bold whitespace-nowrap">
+{row.symbol}{' '}
+<span className="text-[10px] font-normal text-blue-300">
+{row.market === 'CA (.TO)' ? 'CA' : 'US'}
+</span>
+</td>
+<td className="py-2.5 px-3 whitespace-nowrap">
+<span className="font-semibold">${row.price?.toFixed(2)}</span>{' '}
+<span
 className={
-isLocked
-? 'bg-cyan-950/50'
-: row.isCoilPop
-? 'bg-amber-950/20'
-: 'hover:bg-blue-950/40'
+row.changePercent >= 0 ? 'text-emerald-300' : 'text-rose-300'
 }
 >
-<td className="py-3 px-4">
-<div className="font-bold text-white">{row.symbol}</div>
-<div className="text-xs text-blue-300/70 truncate max-w-[180px]">
-{row.name || row.symbol}
-</div>
+({row.changePercent > 0 ? `+${row.changePercent}%` : `${row.changePercent}%`})
+</span>
 </td>
-<td className="py-3 px-4">
-<div className="font-semibold">
-${row.price.toFixed(2)}
-</div>
-<div
-className={`text-xs font-semibold ${
-row.changePercent >= 0
-? 'text-emerald-400'
-: 'text-rose-400'
-}`}
->
-({row.changePercent >= 0 ? '+' : ''}
-{row.changePercent.toFixed(2)}%)
-</div>
+<td className="py-2.5 px-3 whitespace-nowrap text-xs text-blue-100">
+<span className="text-rose-300">${row.stopPrice?.toFixed(2)}</span> /{' '}
+<span className="text-amber-200">${row.trimPrice?.toFixed(2)}</span> /{' '}
+<span className="text-emerald-300">${row.target5Pct?.toFixed(2)}</span>
 </td>
-<td className="py-3 px-4 text-cyan-200 font-medium">
-${(row.price * 1.05).toFixed(2)}
+<td className="py-2.5 px-3 whitespace-nowrap font-medium">
+{row.relVol?.toFixed(2)}x
 </td>
-<td className="py-3 px-4 font-medium">
-{row.relVol.toFixed(2)}x
+<td className="py-2.5 px-3 whitespace-nowrap">
+<span className="font-bold text-cyan-200">{row.setupGrade || '-'}</span>{' '}
+<span className="text-blue-200">({row.coilScore ?? 0})</span>
 </td>
-<td className="py-3 px-4 font-bold text-cyan-300">
-{row.score}
+<td className="py-2.5 px-3 whitespace-nowrap text-xs">
+<span>{row.riskScore ?? '-'}</span>{' '}
+<span className="text-blue-300">• {row.rrRatio ?? '-'}x</span>
 </td>
-<td className="py-3 px-4">
+<td className="py-2.5 px-3 whitespace-nowrap">
 <span
-className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${
-row.setup === 'COIL POP'
-? 'bg-amber-400 text-slate-950'
-: row.setup === 'COILING'
-? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
-: 'bg-slate-800 text-slate-300'
+className={`px-2 py-0.5 rounded text-xs font-semibold ${
+row.isMultiCoil
+? 'bg-purple-500/25 text-purple-200 border border-purple-400/40'
+: row.isCoilPop
+? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/40'
+: row.isCoiling
+? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/30'
+: 'bg-blue-800/40 text-blue-200'
 }`}
 >
 {row.setup}
 </span>
 </td>
-<td className="py-3 px-4">
-<span
-className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold ${
-row.signal === 'EARLY POP'
-? 'bg-emerald-400 text-slate-950'
-: 'bg-blue-900/70 text-blue-200'
-}`}
->
-{row.signal}
-</span>
-</td>
-<td className="py-3 px-4 text-right">
-<button
-type="button"
-onClick={() =>
-setLockedSymbol(isLocked ? null : row.symbol)
-}
-className={`px-3 py-1.5 rounded text-xs font-bold border transition ${
-isLocked
-? 'bg-cyan-400 text-slate-950 border-cyan-300'
-: 'bg-[#07132b] text-blue-100 border-blue-700 hover:border-cyan-400'
-}`}
->
-{isLocked ? 'LOCKED' : 'LOCK'}
-</button>
+<td className="py-2.5 px-3 whitespace-nowrap text-xs font-semibold text-amber-200">
+{row.profitVerdict || row.actionCall || 'WATCH'}
 </td>
 </tr>
-);
-})}
-{filteredRows.length === 0 && (
-<tr>
-<td
-colSpan={8}
-className="py-8 px-4 text-center text-blue-300/70"
->
-No matching tickers for current filter.
-</td>
-</tr>
+))
 )}
 </tbody>
 </table>
-</section>
+</div>
+
+<p className="text-[11px] text-blue-300/80">
+Note: Scanner levels and risk/reward scores are informational decision aids, not financial advice or guaranteed fills. High-beta swings, FX conversions, and tax/TFSA rules all affect net results.
+</p>
 </div>
 </main>
 );
