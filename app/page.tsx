@@ -1,152 +1,112 @@
+
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
-interface ScannerStock {
-ticker: string;
+interface ThreePointCheck {
+passedCount: number;
+passPctBand: boolean;
+passTorqueCap: boolean;
+passRelVol: boolean;
+}
+
+interface ScannerRow {
+symbol: string;
 name?: string;
 price: number;
 changePercent: number;
 relVol: number;
-rangePosition?: number;
-spreadPercent?: number;
 score: number;
 setup: string;
 signal: string;
+isPrimeEarlyCoil?: boolean;
+threePoint?: ThreePointCheck;
 }
 
-export default function HomePage() {
-const [stocks, setStocks] = useState<ScannerStock[]>([]);
-const [loading, setLoading] = useState(false);
-const [error, setError] = useState('');
-const [lastSync, setLastSync] = useState('');
+export default function ScannerPage() {
+const [rows, setRows] = useState<ScannerRow[]>([]);
 const [filterText, setFilterText] = useState('');
-const [lockedTicker, setLockedTicker] = useState<string | null>(null);
+const [primeOnly, setPrimeOnly] = useState(false);
+const [lockedSymbol, setLockedSymbol] = useState<string | null>(null);
+const [lastSync, setLastSync] = useState<string>('');
+const [loading, setLoading] = useState<boolean>(false);
+const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-const fetchSetups = useCallback(async () => {
+const fetchScanner = useCallback(async () => {
 setLoading(true);
-setError('');
+setErrorMsg(null);
 try {
 const res = await fetch('/api/scanner', { cache: 'no-store' });
 const data = await res.json();
-
-if (!res.ok || data?.success === false) {
-throw new Error(data?.error || 'Scanner API returned an error');
+if (!res.ok) {
+throw new Error(data?.error || 'Failed to load scanner');
 }
-
-const list: ScannerStock[] = Array.isArray(data?.stocks) ? data.stocks : [];
-setStocks(list);
-
-setLastSync(
-new Date().toLocaleTimeString('en-US', {
-hour: '2-digit',
-minute: '2-digit',
-second: '2-digit',
-})
-);
+setRows(Array.isArray(data?.rows) ? data.rows : []);
+setLastSync(new Date().toLocaleTimeString());
 } catch (err: unknown) {
-const message =
-err instanceof Error ? err.message : 'Could not load scanner setups';
-setError(message);
-setStocks([]);
+const message = err instanceof Error ? err.message : 'Unable to sync scanner';
+setErrorMsg(message);
 } finally {
 setLoading(false);
 }
 }, []);
 
 useEffect(() => {
-fetchSetups();
-const timer = setInterval(fetchSetups, 30000);
-return () => clearInterval(timer);
-}, [fetchSetups]);
+fetchScanner();
+const interval = setInterval(fetchScanner, 30000);
+return () => clearInterval(interval);
+}, [fetchScanner]);
 
-const lockedStock = useMemo(
-() => stocks.find((s) => s.ticker === lockedTicker) || null,
-[stocks, lockedTicker]
-);
+const lockedRow = lockedSymbol
+? rows.find((r) => r.symbol === lockedSymbol) || null
+: null;
 
-const switchCandidate = useMemo(() => {
-if (!lockedStock) return null;
-const betterCoils = stocks
-.filter(
-(s) =>
-s.ticker !== lockedStock.ticker &&
-s.score - lockedStock.score >= 12
-)
-.sort((a, b) => {
-if (a.setup === 'COIL POP' && b.setup !== 'COIL POP') return -1;
-if (b.setup === 'COIL POP' && a.setup !== 'COIL POP') return 1;
-return b.score - a.score;
+const strongerLeader = lockedRow
+? rows.find(
+(r) =>
+r.symbol !== lockedRow.symbol &&
+r.score - lockedRow.score >= 12
+) || null
+: null;
+
+const filteredRows = rows.filter((row) => {
+const query = filterText.trim().toLowerCase();
+const matchesSearch =
+!query ||
+row.symbol.toLowerCase().includes(query) ||
+(row.name && row.name.toLowerCase().includes(query)) ||
+row.setup.toLowerCase().includes(query) ||
+row.signal.toLowerCase().includes(query);
+
+if (primeOnly) {
+return matchesSearch && Boolean(row.isPrimeEarlyCoil);
+}
+return matchesSearch;
 });
-return betterCoils[0] || null;
-}, [stocks, lockedStock]);
-
-const lockedWeakening =
-lockedStock &&
-(lockedStock.setup === 'PULLBACK / DIP' || lockedStock.score < 55);
-
-const visibleStocks = useMemo(() => {
-const term = filterText.trim().toLowerCase();
-if (!term) return stocks;
-return stocks.filter(
-(s) =>
-String(s.ticker || '').toLowerCase().includes(term) ||
-String(s.name || '').toLowerCase().includes(term) ||
-String(s.setup || '').toLowerCase().includes(term)
-);
-}, [stocks, filterText]);
 
 return (
-<main className="min-h-screen bg-[#070b14] text-slate-100 p-3 md:p-5">
-<div className="max-w-5xl mx-auto space-y-3">
-{(switchCandidate || lockedWeakening) && lockedStock && (
-<div className="rounded-xl border-2 border-amber-400 bg-amber-500/20 p-4 flex flex-wrap items-center justify-between gap-3">
-<div>
-<p className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
-SWITCH WARNING — ROTATION TRIGGERED
-</p>
-<p className="text-sm font-semibold text-white mt-0.5">
-{switchCandidate ? (
-<>
-<strong>{lockedStock.ticker}</strong> (Score {lockedStock.score}) is lagging{' '}
-<strong>{switchCandidate.ticker}</strong> ({switchCandidate.setup}, Score{' '}
-{switchCandidate.score}, +{switchCandidate.score - lockedStock.score} pts).
-</>
-) : (
-<>
-<strong>{lockedStock.ticker}</strong> is losing momentum ({lockedStock.setup}, Score{' '}
-{lockedStock.score}). Watch for a fresh COIL POP to rotate into.
-</>
-)}
-</p>
+<main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+<div className="max-w-6xl mx-auto space-y-6">
+<header className="rounded-2xl bg-slate-900/90 border border-slate-800 p-5 md:p-6 shadow-xl">
+<div className="text-xs font-bold tracking-widest uppercase text-sky-400 mb-1">
+Coil-to-Coil Momentum Co-Pilot
 </div>
-{switchCandidate && (
-<button
-type="button"
-onClick={() => setLockedTicker(switchCandidate.ticker)}
-className="rounded-lg bg-amber-400 hover:bg-amber-300 px-4 py-2 text-xs font-extrabold text-slate-950 cursor-pointer"
->
-SWITCH TO {switchCandidate.ticker}
-</button>
-)}
-</div>
-)}
-
-<div className="rounded-xl border border-slate-800 bg-[#0d1526] p-4 flex flex-wrap items-center justify-between gap-3">
+<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 <div>
-<span className="inline-block rounded-full bg-sky-500/15 px-3 py-0.5 text-xs font-semibold text-sky-400 mb-1.5">
-COIL-TO-COIL MOMENTUM CO-PILOT
-</span>
-<h1 className="text-xl md:text-2xl font-bold text-white">
+<h1 className="text-2xl md:text-3xl font-bold text-white">
 Speedy Early-Ignition Engine
 </h1>
-<p className="text-xs md:text-sm text-slate-400 mt-1">
+<p className="text-sm text-slate-400 mt-1">
 Lock your active coil pop—the scanner warns you when momentum stalls or a +12 pt coil overtakes it.
 </p>
-{lockedStock && (
-<p className="text-xs text-emerald-400 mt-1.5">
-Locked: <strong>{lockedStock.ticker}</strong> (Score {lockedStock.score} · {lockedStock.setup})
-</p>
+{lockedRow && (
+<div className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full">
+<span>Locked: {lockedRow.symbol}</span>
+<span>·</span>
+<span>Score {lockedRow.score}</span>
+<span>·</span>
+<span>{lockedRow.setup}</span>
+</div>
 )}
 </div>
 
@@ -156,125 +116,161 @@ Auto-Sync (30s): {lastSync || '--:--:--'}
 </span>
 <button
 type="button"
-onClick={fetchSetups}
+onClick={fetchScanner}
 disabled={loading}
-className="rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60 px-3.5 py-2 text-xs font-semibold text-white cursor-pointer"
+className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold tracking-wider uppercase transition"
 >
-{loading ? 'SYNCING...' : 'REFRESH'}
+{loading ? 'Syncing...' : 'Refresh'}
 </button>
 </div>
 </div>
 
+{strongerLeader && lockedRow && (
+<div className="mt-4 rounded-xl bg-amber-500/15 border border-amber-400/50 p-3.5 text-amber-200 text-sm flex flex-wrap items-center justify-between gap-2">
+<span>
+<strong>Switch Warning:</strong> {strongerLeader.symbol} (Score {strongerLeader.score} · {strongerLeader.setup}) is +{strongerLeader.score - lockedRow.score} pts ahead of {lockedRow.symbol} (Score {lockedRow.score}).
+</span>
+<button
+type="button"
+onClick={() => setLockedSymbol(strongerLeader.symbol)}
+className="px-3 py-1 rounded bg-amber-400 text-slate-950 text-xs font-extrabold uppercase"
+>
+Switch to {strongerLeader.symbol}
+</button>
+</div>
+)}
+
+{errorMsg && (
+<div className="mt-4 rounded-xl bg-rose-500/15 border border-rose-500/40 p-3 text-rose-200 text-sm">
+{errorMsg}
+</div>
+)}
+</header>
+
+<section className="rounded-2xl bg-slate-900/70 border border-slate-800 p-4 md:p-6">
+<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-5">
 <input
 type="text"
 value={filterText}
 onChange={(e) => setFilterText(e.target.value)}
 placeholder="Filter by ticker, company, or COIL POP..."
-className="w-full rounded-xl border border-slate-800 bg-[#0d1526] px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+className="flex-1 rounded-xl bg-slate-950 border border-slate-700 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
 />
+<button
+type="button"
+onClick={() => setPrimeOnly((prev) => !prev)}
+className={`px-4 py-2.5 rounded-xl text-xs font-extrabold tracking-wider uppercase border transition ${
+primeOnly
+? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+: 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+}`}
+>
+{primeOnly ? '✓ PRIME 1.5–2.3% ON' : 'PRIME 1.5–2.3% ONLY'}
+</button>
+</div>
 
-<div className="rounded-xl border border-slate-800 bg-[#0d1526] overflow-x-auto">
-<table className="w-full text-left border-collapse text-xs md:text-sm">
+<div className="overflow-x-auto">
+<table className="w-full text-left border-collapse">
 <thead>
-<tr className="border-b border-slate-800 text-[11px] uppercase text-slate-400">
-<th className="py-2.5 px-3">TICKER</th>
-<th className="py-2.5 px-3">PRICE / CHG</th>
-<th className="py-2.5 px-3">REL VOL</th>
-<th className="py-2.5 px-3">SCORE</th>
-<th className="py-2.5 px-3">SETUP</th>
-<th className="py-2.5 px-3">SIGNAL</th>
-<th className="py-2.5 px-3 text-right">ACTION</th>
+<tr className="border-b border-slate-800 text-[11px] font-bold tracking-wider uppercase text-slate-400">
+<th className="py-3 px-3">Ticker</th>
+<th className="py-3 px-3">Price / Chg</th>
+<th className="py-3 px-3">Rel Vol</th>
+<th className="py-3 px-3">Score</th>
+<th className="py-3 px-3">Setup</th>
+<th className="py-3 px-3">Signal</th>
+<th className="py-3 px-3 text-right">Action</th>
 </tr>
 </thead>
-<tbody>
-{error ? (
+<tbody className="divide-y divide-slate-800/70 text-sm">
+{filteredRows.length === 0 ? (
 <tr>
-<td colSpan={7} className="py-8 px-4 text-center text-rose-400">
-{error}
-</td>
-</tr>
-) : visibleStocks.length === 0 ? (
-<tr>
-<td colSpan={7} className="py-8 px-4 text-center text-slate-400">
-{loading
-? 'Scanning for coil pops...'
-: 'No active setups matching your filter criteria.'}
+<td colSpan={7} className="py-8 text-center text-slate-400">
+{primeOnly
+? 'No stocks currently match PRIME 1.5–2.3% + 3/3 checks. Toggle off PRIME 1.5–2.3% ONLY to view all tickers.'
+: 'No scanner tickers match your current filter.'}
 </td>
 </tr>
 ) : (
-visibleStocks.map((stock) => {
-const isLocked = lockedTicker === stock.ticker;
-const canRotate =
-lockedStock &&
-!isLocked &&
-stock.score - lockedStock.score >= 12;
+filteredRows.map((row) => {
+const isLocked = lockedSymbol === row.symbol;
+const isPositive = row.changePercent >= 0;
 
 return (
 <tr
-key={stock.ticker}
-className={`border-b border-slate-800/60 hover:bg-slate-800/30 ${
-stock.setup === 'COIL POP' ? 'bg-amber-500/5' : ''
+key={row.symbol}
+className={`transition ${
+isLocked ? 'bg-sky-500/10' : 'hover:bg-slate-800/40'
 }`}
 >
-<td className="py-2.5 px-3 font-bold text-white">
-{stock.ticker}
+<td className="py-3.5 px-3 font-bold text-white">
+<div>{row.symbol}</div>
+{row.name && (
+<div className="text-xs font-normal text-slate-400 truncate max-w-[160px]">
+{row.name}
+</div>
+)}
 </td>
-<td className="py-2.5 px-3">
-<span className="font-semibold text-white">
-${Number(stock.price).toFixed(2)}
-</span>{' '}
-<span
-className={
-stock.changePercent >= 0
-? 'text-emerald-400 text-xs'
-: 'text-rose-400 text-xs'
-}
+
+<td className="py-3.5 px-3">
+<div className="font-semibold text-white">
+${row.price.toFixed(2)}
+</div>
+<div
+className={`text-xs font-semibold ${
+isPositive ? 'text-emerald-400' : 'text-rose-400'
+}`}
 >
-({stock.changePercent >= 0 ? '+' : ''}
-{Number(stock.changePercent).toFixed(2)}%)
+({isPositive ? '+' : ''}
+{row.changePercent.toFixed(2)}%)
+</div>
+</td>
+
+<td className="py-3.5 px-3 font-medium text-slate-200">
+{row.relVol.toFixed(2)}x
+</td>
+
+<td className="py-3.5 px-3 font-bold text-sky-300">
+{row.score}
+</td>
+
+<td className="py-3.5 px-3">
+<div className="flex flex-col items-start gap-1">
+<span className="px-2.5 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
+{row.setup}
+</span>
+
+{row.isPrimeEarlyCoil ? (
+<span className="px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/50">
+PRIME 1.5–2.3% · 3/3 PASS
+</span>
+) : row.setup === 'COIL POP' && row.threePoint ? (
+<span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+{row.threePoint.passedCount}/3 CHECKS
+</span>
+) : null}
+</div>
+</td>
+
+<td className="py-3.5 px-3">
+<span className="px-2.5 py-1 rounded text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-400/30">
+{row.signal}
 </span>
 </td>
-<td className="py-2.5 px-3 text-slate-200">
-{Number(stock.relVol).toFixed(2)}x
-</td>
-<td className="py-2.5 px-3 font-semibold text-sky-300">
-{stock.score}
-</td>
-<td className="py-2.5 px-3 text-xs font-bold">
-<span
-className={
-stock.setup === 'COIL POP'
-? 'rounded bg-amber-500/20 px-2 py-0.5 text-amber-300 border border-amber-400/40'
-: 'text-slate-300'
-}
->
-{stock.setup}
-</span>
-</td>
-<td className="py-2.5 px-3 text-xs">
-<span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
-{stock.signal}
-</span>
-</td>
-<td className="py-2.5 px-3 text-right">
+
+<td className="py-3.5 px-3 text-right">
 <button
 type="button"
 onClick={() =>
-setLockedTicker(isLocked ? null : stock.ticker)
+setLockedSymbol(isLocked ? null : row.symbol)
 }
-className={`rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition ${
 isLocked
-? 'bg-emerald-600 text-white'
-: canRotate
-? 'bg-amber-400 text-slate-950 font-extrabold'
-: 'bg-slate-700 hover:bg-slate-600 text-white'
+? 'bg-emerald-500 text-slate-950'
+: 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
 }`}
 >
-{isLocked
-? 'LOCKED'
-: canRotate
-? 'SWITCH (+12)'
-: 'Lock Position'}
+{isLocked ? 'Locked' : 'Lock'}
 </button>
 </td>
 </tr>
@@ -284,6 +280,7 @@ isLocked
 </tbody>
 </table>
 </div>
+</section>
 </div>
 </main>
 );
