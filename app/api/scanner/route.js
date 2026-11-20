@@ -170,8 +170,12 @@ const lastVol = vols.length ? vols[vols.length - 1] : avgVol;
 const relVol = avgVol > 0 ? Number(Math.max(0.2, Math.min(8, lastVol / avgVol)).toFixed(2)) : 1;
 
 const daytimeActive = isRegularDaytime(sessionPhase);
-const constructiveTrend = intradayMovePct >= 0 || changePercent >= -0.15;
-const isCoiling = constructiveTrend && rangePct > 0 && rangePct <= 1.05;
+const inActiveRange =
+changePercent >= 0 &&
+changePercent <= 3.0 &&
+intradayMovePct >= 0 &&
+intradayMovePct <= 3.0;
+const isCoiling = inActiveRange && rangePct > 0 && rangePct <= 1.05;
 
 const inDaytimePopBand =
 (changePercent >= 1.0 && changePercent <= 2.75) ||
