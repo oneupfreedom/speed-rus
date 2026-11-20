@@ -1,164 +1,151 @@
 
 import { NextResponse } from 'next/server';
 
-const DEFAULT_SYMBOLS = [
-'GAP',
-'GIS',
-'HDB',
-'AAP',
-'SYY',
-'BILL',
-'AXON',
-'MKC',
-'FND',
-'BSP',
-'WMT',
-'T',
-'CTSH',
-'ACN',
-'KVYO',
-'CAG',
-'CPB',
-'BRO',
+const DEFAULT_WATCHLIST = [
+'AAPL', 'MSFT', 'NVDA', 'AMD', 'TSLA', 'META', 'AMZN', 'GOOGL',
+'PLTR', 'SMCI', 'COIN', 'SOFI', 'HOOD', 'RKLB', 'IONQ', 'MARA',
+'RIOT', 'UPST', 'AFRM', 'DKNG', 'RIVN', 'LCID', 'F', 'GM',
+'AAP', 'TGT', 'COST', 'HD', 'LOW', 'SBUX', 'NKE', 'DIS',
+'NFLX', 'CRM', 'NOW', 'SNOW', 'PANW', 'CRWD', 'MU', 'INTC',
+'AVGO', 'QCOM', 'ARM', 'XOM', 'CVX', 'OXY', 'JPM', 'BAC',
 ];
 
-function toNumber(val, fallback = 0) {
-const num = typeof val === 'number' ? val : Number(val);
-return Number.isFinite(num) ? num : fallback;
-}
-
-function classifySetup(changePercent, relVol) {
-if (relVol >= 8 && Math.abs(changePercent) >= 8) {
-return 'PULLBACK / DIP';
-}
-if (changePercent >= 1.5 && changePercent <= 9.5 && relVol >= 1.15) {
-return 'COIL POP';
-}
-return 'BREAKOUT RUN';
-}
-
-function classifySignal(score) {
-if (score >= 75) return 'TOP LEADER';
-if (score >= 62) return 'CHALLENGER';
-return 'MONITOR';
-}
-
-function computeScore(price, changePercent, relVol) {
-const absMove = Math.abs(changePercent);
-const volPoints = Math.min(40, Math.round(relVol * 14));
-const movePoints = Math.min(30, Math.round(absMove * 4.5));
-const coilBonus = changePercent >= 1.5 && changePercent <= 9.5 && relVol >= 1.15 ? 12 : 0;
-const priceBonus = price >= 5 && price <= 150 ? 6 : 2;
-return Math.max(35, Math.min(99, volPoints + movePoints + coilBonus + priceBonus));
-}
-
-async function fetchQuotes(symbols) {
-const query = encodeURIComponent(symbols.join(','));
-const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${query}`;
+async function fetchSingleChart(symbol) {
+const encoded = encodeURIComponent(symbol);
+const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1m&range=1d`;
 
 const response = await fetch(url, {
 headers: {
-'User-Agent': 'Mozilla/5.0',
-Accept: 'application/json',
+'User-Agent':
+'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+Accept: 'application/json,text/plain,*/*',
 },
 cache: 'no-store',
 });
 
 if (!response.ok) {
-throw new Error(`Quote provider returned status ${response.status}`);
+throw new Error(`Chart status ${response.status} for ${symbol}`);
 }
 
 const data = await response.json();
-return data?.quoteResponse?.result ?? [];
-}
+const meta = data?.chart?.result?.[0]?.meta;
+if (!meta) return null;
 
-export async function GET(request) {
-try {
-const { searchParams } = new URL(request.url);
-const symbolsParam = searchParams.get('symbols');
-const symbols = symbolsParam
-? symbolsParam
-.split(',')
-.map((s) => s.trim().toUpperCase())
-.filter(Boolean)
-: DEFAULT_SYMBOLS;
-
-const quotes = await fetchQuotes(symbols);
-
-const rows = quotes.map((q) => {
-const symbol = q.symbol || '';
-const name = q.shortName || q.longName || symbol;
-const price = toNumber(q.regularMarketPrice ?? q.postMarketPrice ?? q.preMarketPrice, 0);
-
-const prevCloseVal = toNumber(
-q.regularMarketPreviousClose ?? q.previousClose ?? q.chartPreviousClose,
-0
+const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? 0);
+const prevClose = Number(
+meta.chartPreviousClose ?? meta.previousClose ?? price
 );
-
-const rawChangePct = toNumber(q.regularMarketChangePercent, 0);
-const truePct =
-prevCloseVal > 0 && price > 0
-? ((price - prevCloseVal) / prevCloseVal) * 100
-: rawChangePct;
-
-const volume = toNumber(q.regularMarketVolume, 0);
-const avgVolume = toNumber(
-q.averageDailyVolume3Month ?? q.averageDailyVolume10Day,
-0
+const volume = Number(meta.regularMarketVolume ?? 0);
+const avgVol = Number(
+meta.averageDailyVolume3Month ?? meta.averageDailyVolume10Day ?? 0
 );
-const relVol =
-volume > 0 && avgVolume > 0
-? Number((volume / avgVolume).toFixed(2))
-: 0;
+const marketCap = Number(meta.marketCap ?? 0);
 
-const mktCapVal = toNumber(q.marketCap, 0);
-const changePercent = Number(truePct.toFixed(2));
-const score = computeScore(price, changePercent, relVol);
-const setup = classifySetup(changePercent, relVol);
-const signal = classifySignal(score);
+if (!price || price <= 0) return null;
 
-const passPctBand = changePercent >= 1.5 && changePercent <= 2.35;
-const passTorqueCap =
-price >= 5 &&
-price <= 85 &&
-(!mktCapVal || (mktCapVal >= 500_000_000 && mktCapVal <= 35_000_000_000));
-const passRelVol = relVol >= 1.5;
-
-const threePointPassedCount = [passPctBand, passTorqueCap, passRelVol].filter(
-Boolean
-).length;
-const isPrimeEarlyCoil =
-setup === 'COIL POP' && passPctBand && passTorqueCap && passRelVol;
+const changePercent =
+prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+const relVol = avgVol > 0 ? volume / avgVol : 1;
 
 return {
-symbol,
-name,
-price: Number(price.toFixed(2)),
+symbol: meta.symbol || symbol,
+name: meta.shortName || meta.longName || symbol,
+price,
+prevClose,
 changePercent,
 relVol,
-score,
+marketCap,
+};
+}
+
+async function fetchQuotes(symbols) {
+const results = await Promise.allSettled(
+symbols.map((sym) => fetchSingleChart(sym))
+);
+
+const quotes = results
+.filter((r) => r.status === 'fulfilled' && r.value)
+.map((r) => r.value);
+
+if (quotes.length === 0) {
+throw new Error('Quote provider returned status 401 or blocked requests');
+}
+
+return quotes;
+}
+
+function evaluateRow(q) {
+// 3-Point Check for early COIL POP entry
+const passPctBand = q.changePercent >= 1.5 && q.changePercent <= 2.35;
+const passTorqueCap =
+q.price >= 5 &&
+q.price <= 85 &&
+(q.marketCap === 0 || (q.marketCap >= 5e8 && q.marketCap <= 3.5e10));
+const passRelVol = q.relVol >= 1.5;
+
+const passedCount =
+(passPctBand ? 1 : 0) + (passTorqueCap ? 1 : 0) + (passRelVol ? 1 : 0);
+
+const isPrimeEarlyCoil = passPctBand && passTorqueCap && passRelVol;
+
+let setup = 'WATCH';
+let signal = 'WAIT';
+
+if (isPrimeEarlyCoil) {
+setup = 'COIL POP';
+signal = 'PRIME ENTRY';
+} else if (q.changePercent >= 1.2 && q.changePercent <= 3.0 && q.relVol >= 1.2) {
+setup = 'COIL POP';
+signal = 'WATCH IGNITION';
+} else if (q.changePercent > 3.0) {
+setup = 'EXTENDED';
+signal = 'NO CHASE';
+} else if (q.changePercent < -1.0) {
+setup = 'PULLBACK';
+signal = 'CAUTION';
+}
+
+let score = 40;
+score += Math.max(-15, Math.min(25, q.changePercent * 8));
+score += Math.max(0, Math.min(20, (q.relVol - 1) * 12));
+if (passPctBand) score += 10;
+if (passTorqueCap) score += 5;
+if (isPrimeEarlyCoil) score += 10;
+
+return {
+symbol: q.symbol,
+name: q.name,
+price: q.price,
+changePercent: q.changePercent,
+relVol: q.relVol,
+score: Math.round(score),
 setup,
 signal,
 isPrimeEarlyCoil,
 threePoint: {
-passedCount: threePointPassedCount,
+passedCount,
 passPctBand,
 passTorqueCap,
 passRelVol,
 },
 };
-});
+}
 
-rows.sort((a, b) => b.score - a.score);
+export async function GET() {
+try {
+const quotes = await fetchQuotes(DEFAULT_WATCHLIST);
+const rows = quotes
+.map(evaluateRow)
+.sort((a, b) => b.score - a.score);
 
 return NextResponse.json({
+ok: true,
 updatedAt: new Date().toISOString(),
 rows,
 });
-} catch (error) {
-return NextResponse.json(
-{ error: error?.message || 'Scanner route failed', rows: [] },
-{ status: 500 }
-);
+} catch (err) {
+const message =
+err instanceof Error ? err.message : 'Unable to fetch market data';
+return NextResponse.json({ error: message, rows: [] }, { status: 500 });
 }
 }
