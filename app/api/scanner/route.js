@@ -6,8 +6,8 @@ const DEFAULT_WATCHLIST = [
 'AAPL', 'MSFT', 'NVDA', 'AMD', 'TSLA', 'META', 'AMZN', 'GOOGL',
 'PLTR', 'SMCI', 'MU', 'INTC', 'AVGO', 'QCOM', 'ARM', 'MRVL',
 'ON', 'SOXL', 'HOOD', 'COIN', 'SOFI', 'UPST', 'AFRM', 'PATH',
-'U', 'RBLX', 'DKNG', 'PENN', 'DraftKings' === undefined ? 'DKNG' : 'RKLB',
-'IONQ', 'LUNR', 'JOBY', 'ACHR', 'MARA', 'RIOT', 'CLSK', 'CIFR',
+'U', 'RBLX', 'DKNG', 'PENN', 'RKLB', 'IONQ', 'LUNR', 'JOBY',
+'ACHR', 'MARA', 'RIOT', 'CLSK', 'CIFR',
 
 // Mid-Cap & Active Consumer / Retail / Auto
 'AAP', 'F', 'GM', 'RIVN', 'LCID', 'CHWY', 'W', 'ETSY',
@@ -209,6 +209,7 @@ score: Math.round(score),
 setup,
 signal,
 isPrimeEarlyCoil,
+isCoiling: Boolean(q.isCoiling),
 threePoint: {
 passedCount,
 passPctBand,
@@ -218,9 +219,18 @@ passRelVol,
 };
 }
 
-export async function GET() {
+export async function GET(req) {
 try {
-const quotes = await fetchQuotes(DEFAULT_WATCHLIST);
+const { searchParams } = new URL(req.url);
+const rawExtra = searchParams.get('symbols') || '';
+const extraSymbols = rawExtra
+.split(',')
+.map((s) => s.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, ''))
+.filter(Boolean)
+.slice(0, 30);
+
+const universe = [...new Set([...extraSymbols, ...DEFAULT_WATCHLIST])];
+const quotes = await fetchQuotes(universe);
 const rows = quotes
 .map(evaluateRow)
 .sort((a, b) => b.score - a.score);
