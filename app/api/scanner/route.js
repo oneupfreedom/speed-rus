@@ -38,7 +38,7 @@ const DEFAULT_TICKERS = [
 ].slice(0, 280);
 
 const CACHE_TTL_MS = 20_000;
-const BATCH_SIZE = 35;
+const BATCH_SIZE = 50;
 
 let scannerCache = {
 timestamp: 0,
@@ -47,24 +47,30 @@ data: null,
 };
 
 function getSessionPhase(now = new Date()) {
-const estStr = now.toLocaleString('en-US', {
+try {
+const parts = new Intl.DateTimeFormat('en-US', {
 timeZone: 'America/New_York',
-hour12: false,
 weekday: 'short',
 hour: '2-digit',
 minute: '2-digit',
-});
-const [weekday, timePart] = estStr.split(', ');
+hour12: false,
+}).formatToParts(now);
+
+const weekday = parts.find((p) => p.type === 'weekday')?.value || '';
+const hh = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+const mm = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
+
 if (weekday === 'Sat' || weekday === 'Sun') {
 return 'POST_CLOSE';
 }
-const [hh, mm] = timePart.split(':').map(Number);
 const mins = hh * 60 + mm;
-
-if (mins < 570) return 'PRE_BELL'; // before 9:30 AM ET
-if (mins >= 575 && mins <= 600) return 'BELL_935_WINDOW'; // 9:35 AM - 10:00 AM ET
-if (mins > 570 && mins <= 960) return 'DAY_SESSION'; // 9:30 AM - 4:00 PM ET
+if (mins < 570) return 'PRE_BELL';
+if (mins >= 575 && mins <= 600) return 'BELL_935_WINDOW';
+if (mins > 570 && mins <= 960) return 'DAY_SESSION';
 return 'POST_CLOSE';
+} catch {
+return 'POST_CLOSE';
+}
 }
 
 function isRegularDaytime(phase) {
@@ -77,7 +83,9 @@ const valid = quotes5d30m.filter(
 (q) =>
 q &&
 typeof q.high === 'number' &&
+Number.isFinite(q.high) &&
 typeof q.low === 'number' &&
+Number.isFinite(q.low) &&
 q.high > 0 &&
 q.low > 0
 );
@@ -95,10 +103,14 @@ symbol
 )}?interval=30m&range=5d&includePrePost=false`;
 
 try {
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 5000);
+
 const res = await fetch(url, {
 headers: { 'User-Agent': 'Mozilla/5.0' },
 cache: 'no-store',
-});
+signal: controller.signal,
+}).finally(() => clearTimeout(timer));
 
 if (!res.ok) {
 return {
@@ -117,7 +129,12 @@ const result = json?.chart?.result?.[0];
 const meta = result?.meta;
 const quote = result?.indicators?.quote?.[0];
 
-if (!meta || !quote || !Array.isArray(quote.close) || quote.close.length === 0) {
+const rawCloses = Array.isArray(quote?.close) ? quote.close : [];
+const rawHighs = Array.isArray(quote?.high) ? quote.high : [];
+const rawLows = Array.isArray(quote?.low) ? quote.low : [];
+const rawVols = Array.isArray(quote?.volume) ? quote.volume : [];
+
+if (!meta || rawCloses.length === 0) {
 return {
 symbol,
 isFallback: true,
@@ -129,20 +146,26 @@ setupGrade: '-',
 };
 }
 
-const closes = quote.close.filter((v) => typeof v === 'number' && v > 0);
-const highs = quote.high.filter((v) => typeof v === 'number' && v > 0);
-const lows = quote.low.filter((v) => typeof v === 'number' && v > 0);
-const vols = quote.volume.filter((v) => typeof v === 'number' && v >= 0);
+const closes = rawCloses.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
+const highs = rawHighs.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
+const lows = rawLows.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
+const vols = rawVols.filter((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0);
 
 const rawPrice =
-typeof meta.regularMarketPrice === 'number' && meta.regularMarketPrice > 0
+typeof meta.regularMarketPrice === 'number' &&
+Number.isFinite(meta.regularMarketPrice) &&
+meta.regularMarketPrice > 0
 ? meta.regularMarketPrice
 : closes[closes.length - 1] || 0;
 
 const prevClose =
-typeof meta.previousClose === 'number' && meta.previousClose > 0
+typeof meta.previousClose === 'number' &&
+Number.isFinite(meta.previousClose) &&
+meta.previousClose > 0
 ? meta.previousClose
-: typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
+: typeof meta.chartPreviousClose === 'number' &&
+Number.isFinite(meta.chartPreviousClose) &&
+meta.chartPreviousClose > 0
 ? meta.chartPreviousClose
 : rawPrice;
 
@@ -177,10 +200,11 @@ vols.length > 1
 const lastVol = vols.length ? vols[vols.length - 1] : 0;
 const relVol = avgVol > 0 ? Number((lastVol / avgVol).toFixed(2)) : 1.0;
 
-const bars5d = quote.high.map((_, idx) => ({
-high: quote.high[idx],
-low: quote.low[idx],
-}));
+const maxLen = Math.max(rawHighs.length, rawLows.length);
+const bars5d = [];
+for (let i = 0; i < maxLen; i += 1) {
+bars5d.push({ high: rawHighs[i], low: rawLows[i] });
+}
 const multiDayRangePct = calcMultiDayRangePct(bars5d);
 
 const isFallback = false;
@@ -216,7 +240,6 @@ const setup = isMultiCoil
 ? 'COILING'
 : 'WATCH';
 
-// Risk, stop, trim & +5% levels
 const stopCandidate = recentLow > 0 ? recentLow * 0.994 : rawPrice * 0.985;
 const maxRiskFloor = rawPrice * 0.982;
 const stopPrice = Number(Math.max(stopCandidate, maxRiskFloor).toFixed(2));
@@ -246,7 +269,6 @@ Math.min(20, Math.max(0, Math.abs(changePercent) * 4.5));
 const riskScore = Number(Math.min(99, Math.max(10, rawRisk)).toFixed(0));
 const riskLevel = riskScore >= 70 ? 'HIGH RISK' : riskScore >= 45 ? 'MOD RISK' : 'LOW RISK';
 
-// Quality score for best COIL POP & MULTI-COIL setups
 let coilScore = 0;
 if (isMultiCoil) {
 const baseRange = typeof multiDayRangePct === 'number' ? multiDayRangePct : rangePct;
@@ -328,6 +350,7 @@ setupGrade: '-',
 }
 
 export async function GET(request) {
+try {
 const { searchParams } = new URL(request.url);
 const customParam = searchParams.get('symbols');
 const tickers = customParam
@@ -342,7 +365,11 @@ const sessionPhase = getSessionPhase();
 const cacheKey = `${sessionPhase}:${tickers.join(',')}`;
 const now = Date.now();
 
-if (scannerCache.data && scannerCache.key === cacheKey && now - scannerCache.timestamp < CACHE_TTL_MS) {
+if (
+scannerCache.data &&
+scannerCache.key === cacheKey &&
+now - scannerCache.timestamp < CACHE_TTL_MS
+) {
 return NextResponse.json(scannerCache.data);
 }
 
@@ -357,7 +384,6 @@ rows.push(...chunkResults);
 
 const validRows = rows.filter((r) => !r.isFallback);
 
-// Best COIL POP & MULTI-COIL ranked highest by coilScore, then rrRatio
 const rankedRows = [...validRows].sort((a, b) => {
 if (a.isCoilPop !== b.isCoilPop) return a.isCoilPop ? -1 : 1;
 if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
@@ -381,4 +407,14 @@ data: payload,
 };
 
 return NextResponse.json(payload);
+} catch (err) {
+return NextResponse.json(
+{
+error: err instanceof Error ? err.message : 'Scanner route failed',
+rows: [],
+topCoilSetups: [],
+},
+{ status: 500 }
+);
+}
 }
