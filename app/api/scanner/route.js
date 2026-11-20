@@ -2,12 +2,27 @@
 import { NextResponse } from 'next/server';
 
 const DEFAULT_WATCHLIST = [
+// Core Tech, AI & Semis
 'AAPL', 'MSFT', 'NVDA', 'AMD', 'TSLA', 'META', 'AMZN', 'GOOGL',
-'PLTR', 'SMCI', 'COIN', 'SOFI', 'HOOD', 'RKLB', 'IONQ', 'MARA',
-'RIOT', 'UPST', 'AFRM', 'DKNG', 'RIVN', 'LCID', 'F', 'GM',
-'AAP', 'TGT', 'COST', 'HD', 'LOW', 'SBUX', 'NKE', 'DIS',
-'NFLX', 'CRM', 'NOW', 'SNOW', 'PANW', 'CRWD', 'MU', 'INTC',
-'AVGO', 'QCOM', 'ARM', 'XOM', 'CVX', 'OXY', 'JPM', 'BAC',
+'PLTR', 'SMCI', 'MU', 'INTC', 'AVGO', 'QCOM', 'ARM', 'MRVL',
+'ON', 'SOXL', 'HOOD', 'COIN', 'SOFI', 'UPST', 'AFRM', 'PATH',
+'U', 'RBLX', 'DKNG', 'PENN', 'DraftKings' === undefined ? 'DKNG' : 'RKLB',
+'IONQ', 'LUNR', 'JOBY', 'ACHR', 'MARA', 'RIOT', 'CLSK', 'CIFR',
+
+// Mid-Cap & Active Consumer / Retail / Auto
+'AAP', 'F', 'GM', 'RIVN', 'LCID', 'CHWY', 'W', 'ETSY',
+'SNAP', 'PINS', 'LYFT', 'UBER', 'DASH', 'BABA', 'JD', 'NIO',
+'XPEV', 'LI', 'GAP', 'ANF', 'URBN', 'KSS', 'M', 'BBY',
+'FIVE', 'DLTR', 'DG', 'WEN', 'SHAK', 'CAVA', 'BROS', 'CELH',
+
+// Industrials, Energy, Materials & Financials
+'XOM', 'CVX', 'OXY', 'HAL', 'SLB', 'DVN', 'APA', 'RIG',
+'KMI', 'WMB', 'FCX', 'AA', 'MP', 'ALB', 'UAL', 'DAL',
+'AAL', 'LUV', 'JBLU', 'BAC', 'C', 'WFC', 'SCHW', 'ALLY',
+
+// Healthcare, Biotech & Broad Movers
+'MRNA', 'NVAX', 'BIIB', 'VRTX', 'ILMN', 'DXCM', 'TDOC', 'HIMS',
+'ROKU', 'TTD', 'ZM', 'DOCU', 'SHOP', 'SQ', 'PYPL', 'DIS',
 ];
 
 async function fetchSingleChart(symbol) {
@@ -71,16 +86,19 @@ ranges.push(((h - l) / c) * 100);
 }
 
 let isCoiling = false;
-if (ranges.length >= 6) {
-const recentCoilWindow = ranges.slice(-4, -1);
-const earlierBaseWindow = ranges.slice(-9, -4);
-if (recentCoilWindow.length > 0 && earlierBaseWindow.length > 0) {
+if (ranges.length >= 4) {
+const recentSlice = ranges.slice(-3);
+const priorSlice = ranges.slice(-8, -3);
 const avgRecentRange =
-recentCoilWindow.reduce((sum, r) => sum + r, 0) / recentCoilWindow.length;
-const avgEarlierRange =
-earlierBaseWindow.reduce((sum, r) => sum + r, 0) / earlierBaseWindow.length;
-isCoiling = avgEarlierRange > 0 && avgRecentRange <= avgEarlierRange * 0.85;
-}
+recentSlice.reduce((sum, r) => sum + r, 0) / recentSlice.length;
+const avgPriorRange =
+priorSlice.length > 0
+? priorSlice.reduce((sum, r) => sum + r, 0) / priorSlice.length
+: avgRecentRange;
+
+const compressedVsPrior = avgPriorRange > 0 && avgRecentRange <= avgPriorRange * 0.98;
+const tightBase = avgRecentRange <= 3.8;
+isCoiling = compressedVsPrior || tightBase;
 }
 
 const priorDailyClose =
@@ -122,8 +140,9 @@ isCoiling,
 }
 
 async function fetchQuotes(symbols) {
+const uniqueSymbols = [...new Set(symbols)];
 const results = await Promise.allSettled(
-symbols.map((sym) => fetchSingleChart(sym))
+uniqueSymbols.map((sym) => fetchSingleChart(sym))
 );
 
 const quotes = results
@@ -158,13 +177,13 @@ setup = 'COIL POP';
 signal = 'PRIME ENTRY';
 } else if (
 q.isCoiling &&
-q.changePercent >= 1.2 &&
-q.changePercent <= 3.0 &&
-q.relVol >= 1.2
+q.changePercent >= 1.0 &&
+q.changePercent <= 3.2 &&
+q.relVol >= 1.0
 ) {
 setup = 'COIL POP';
 signal = 'WATCH IGNITION';
-} else if (q.changePercent > 3.0) {
+} else if (q.changePercent > 3.2) {
 setup = 'EXTENDED';
 signal = 'NO CHASE';
 } else if (q.changePercent < -1.0) {
@@ -175,7 +194,7 @@ signal = 'CAUTION';
 let score = 40;
 score += Math.max(-15, Math.min(25, q.changePercent * 8));
 score += Math.max(0, Math.min(20, (q.relVol - 1) * 12));
-if (q.isCoiling) score += 10;
+if (q.isCoiling) score += 12;
 if (passPctBand) score += 10;
 if (passTorqueCap) score += 5;
 if (isPrimeEarlyCoil) score += 10;
