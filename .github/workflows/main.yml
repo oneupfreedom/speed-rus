@@ -1,0 +1,30 @@
+
+name: Revert Last Commit
+
+on:
+workflow_dispatch:
+inputs:
+branch:
+description: "Branch to revert"
+required: true
+default: "main"
+
+permissions:
+contents: write
+
+jobs:
+revert:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout branch
+uses: actions/checkout@v4
+with:
+ref: ${{ github.event.inputs.branch }}
+fetch-depth: 2
+
+- name: Revert latest commit
+run: |
+git config --global user.name "github-actions[bot]"
+git config --global user.email "github-actions[bot]@users.noreply.github.com"
+git revert --no-edit HEAD
+git push origin ${{ github.event.inputs.branch }}
