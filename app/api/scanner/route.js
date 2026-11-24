@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 
 const DEFAULT_TICKERS = [
@@ -122,13 +123,18 @@ volume: typeof v === 'number' ? v : 0
 if (validBars.length < 3) return null;
 
 const latestBar = validBars[validBars.length - 1];
-const price = Number((meta.regularMarketPrice ?? latestBar.close).toFixed(2));
-const prevClose = Number(
-(meta.chartPreviousClose ?? meta.previousClose ?? validBars[0].open).toFixed(2)
-);
-if (!price || !prevClose) return null;
+const rawPrice = meta.regularMarketPrice ?? latestBar.close;
+const rawPrevClose = meta.chartPreviousClose ?? meta.previousClose ?? validBars[0].open;
+if (!rawPrice || !rawPrevClose) return null;
 
-const changePercent = Number((((price - prevClose) / prevClose) * 100).toFixed(2));
+const price = Number(rawPrice.toFixed(rawPrice < 1 ? 4 : 2));
+const prevClose = Number(rawPrevClose.toFixed(rawPrevClose < 1 ? 4 : 2));
+const changePercent = Number((((rawPrice - rawPrevClose) / rawPrevClose) * 100).toFixed(2));
+const absChangePercent = Number(Math.abs(changePercent).toFixed(2));
+const pctToFiveTarget = Number((5.0 - changePercent).toFixed(2));
+const hitFivePct = changePercent >= 5.0;
+const nearFivePct = changePercent >= 3.0 && changePercent < 5.0;
+
 const dailyVolume = Number(
 meta.regularMarketVolume ||
 validBars.slice(-13).reduce((sum, b) => sum + (b.volume || 0), 0)
@@ -163,42 +169,46 @@ daytimeActive && !isCoilPop && isMultiTight && inMultiPopBand && relVol >= 1.15;
 const isCoiling = (isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
 
 let setup = 'WATCH';
-if (isCoilPop) setup = 'COIL POP';
+if (hitFivePct) setup = '5%+ RUNNER';
+else if (isCoilPop) setup = 'COIL POP';
 else if (isMultiCoil) setup = 'MULTI-COIL';
 else if (isCoiling) setup = 'COILING';
 
-const rawStop = Math.min(coilLow * 0.994, price * 0.985);
-const floorStop = price * 0.982;
-const stopPrice = Number(Math.max(rawStop, floorStop).toFixed(2));
-const trimPrice = Number((price * 1.0325).toFixed(2));
-const target5Price = Number((price * 1.05).toFixed(2));
+const decimals = rawPrice < 1 ? 4 : 2;
+const rawStop = Math.min(coilLow * 0.994, rawPrice * 0.985);
+const floorStop = rawPrice * 0.982;
+const stopPrice = Number(Math.max(rawStop, floorStop).toFixed(decimals));
+const trimPrice = Number((rawPrice * 1.0325).toFixed(decimals));
+const target5Price = Number((rawPrice * 1.05).toFixed(decimals));
 
 const downsideRiskPct = Number(
-Math.max(((price - stopPrice) / price) * 100, 0.4).toFixed(2)
+Math.max(((rawPrice - stopPrice) / rawPrice) * 100, 0.4).toFixed(2)
 );
 const upsideTo5Pct = 5.0;
 const rrRatio = Number((upsideTo5Pct / downsideRiskPct).toFixed(2));
 
 const volatilityPenalty = Math.min(45, Math.round(rangePct * 14));
-const pricePenalty = price < 3 ? 25 : price < 10 ? 10 : 0;
+const pricePenalty = rawPrice < 3 ? 25 : rawPrice < 10 ? 10 : 0;
 const riskScore = Math.min(99, Math.max(25, 35 + volatilityPenalty + pricePenalty));
 
 let coilScore = 0;
 let setupGrade = '-';
-if (isCoilPop || isMultiCoil) {
-const volPts = Math.min(40, Math.round(relVol * 18));
-const tightPts = Math.max(10, Math.round((1.5 - Math.min(rangePct, 1.5)) * 25));
-const rrPts = Math.min(25, Math.round(rrRatio * 3));
-coilScore = Math.min(99, volPts + tightPts + rrPts);
+if (isCoilPop || isMultiCoil || nearFivePct || hitFivePct) {
+const movePts = Math.min(40, Math.round(absChangePercent * 8));
+const volPts = Math.min(35, Math.round(relVol * 16));
+const tightPts = Math.max(10, Math.round((1.5 - Math.min(rangePct, 1.5)) * 15));
+coilScore = Math.min(99, movePts + volPts + tightPts);
 setupGrade =
 coilScore >= 85 ? 'A+' : coilScore >= 72 ? 'A' : coilScore >= 60 ? 'B' : 'C';
 }
 
 let profitVerdict = 'HOLD / WAIT';
-if (!daytimeActive) {
+if (hitFivePct) {
+profitVerdict = '5%+ TARGET HIT';
+} else if (nearFivePct) {
+profitVerdict = 'NEAR +5% PUSH';
+} else if (!daytimeActive) {
 profitVerdict = 'WAIT FOR DAYTIME';
-} else if (changePercent > 3.25) {
-profitVerdict = 'TRIM / WATCH EXIT';
 } else if (isCoilPop || isMultiCoil) {
 profitVerdict = 'ACTIVE ENTRY';
 }
@@ -209,6 +219,10 @@ market: symbol.toUpperCase().endsWith('.TO') ? 'CA' : 'US',
 currency: symbol.toUpperCase().endsWith('.TO') ? 'CAD' : 'USD',
 price,
 changePercent,
+absChangePercent,
+pctToFiveTarget,
+hitFivePct,
+nearFivePct,
 dailyVolume,
 rangePct,
 multiDayRangePct,
@@ -256,12 +270,11 @@ rows.push(...results.filter(Boolean));
 }
 
 rows.sort((a, b) => {
-const aActive = a.isCoilPop || a.isMultiCoil ? 1 : 0;
-const bActive = b.isCoilPop || b.isMultiCoil ? 1 : 0;
-if (bActive !== aActive) return bActive - aActive;
-if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
-if (b.rrRatio !== a.rrRatio) return b.rrRatio - a.rrRatio;
-return b.relVol - a.relVol;
+if (b.absChangePercent !== a.absChangePercent) {
+return b.absChangePercent - a.absChangePercent;
+}
+if (b.relVol !== a.relVol) return b.relVol - a.relVol;
+return b.coilScore - a.coilScore;
 });
 
 return NextResponse.json({
