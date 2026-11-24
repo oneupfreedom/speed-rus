@@ -1,3 +1,6 @@
+Rudranth McDowall <oneupfreedom@gmail.com>
+1:01 PM (0 minutes ago)
+to me
 
 import { NextResponse } from 'next/server';
 
@@ -7,15 +10,15 @@ const DEFAULT_TICKERS = [
 'LUNR', 'RKLB', 'ASTS', 'ACHR', 'JOBY', 'HIMS', 'AFRM', 'UPST', 'HOOD', 'RIVN',
 'LCID', 'NIO', 'XPEV', 'BABA', 'BIDU', 'PDD', 'JD', 'ARM', 'MRVL', 'AVGO',
 'MU', 'INTC', 'QCOM', 'TXN', 'AMAT', 'LRCX', 'KLAC', 'ASML', 'SNOW', 'NET',
-'DDOG', 'MDB', 'PANW', 'CRWD', 'ZS', 'OKTA', 'SHOP.TO', 'CSU.TO', 'DFN.TO', 'HNU.TO',
+'DDOG', 'MDB', 'PANW', 'CRWD', 'ZS', 'OKTA', 'SHOP.TO', 'CSU.TO', 'NVEI.TO', 'KXS.TO',
 'HOU.TO', 'HQU.TO', 'HQD.TO', 'BITX', 'IBIT', 'FBTC', 'ETHA', 'TQQQ', 'SQQQ', 'SOXL',
-'SOXS', 'SPXL', 'SPXS', 'LABU', 'LABD', 'FAS', 'FAZ', 'NUGT', 'DUST', 'GDXJ',
-'SILJ', 'URA', 'URNM', 'NLR', 'XLE', 'XOP', 'OIH', 'XBI', 'ARKK', 'ARKG',
+'SOXS', 'SPXL', 'SPXS', 'LABU', 'LABD', 'FAS', 'FAZ', 'NUGT', 'DUST', 'GDX',
+'SILJ', 'URA', 'URNM', 'NLR', 'XLE', 'XOP', 'OIH', 'XBI', 'ARKK', 'FXI',
 'KWEB', 'FXI', 'EWZ', 'INDA', 'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'TMF',
 'TMV', 'UVXY', 'VXX', 'CVNA', 'CARV', 'CHWY', 'ROKU', 'TTD', 'SNAP', 'PINS',
 'UBER', 'LYFT', 'DASH', 'ABNB', 'DKNG', 'PENN', 'MGM', 'WYNN', 'CCL', 'RCL',
 'NCLH', 'AAL', 'UAL', 'DAL', 'JBLU', 'BA', 'GE', 'CAT', 'DE', 'URI',
-'FCX', 'MP', 'ALB', 'LAC', 'ENPH', 'FSLR', 'RUN', 'SEDG', 'PLUG', 'BE',
+'FCX', 'MP', 'ALB', 'LAC', 'ENPH', 'FSLR', 'RUN', 'SEDG', 'PLUG', 'BLDP',
 'CHPT', 'QS', 'MVST', 'STEM', 'BBAI', 'SOUN', 'AI', 'PATH', 'U', 'RBLX',
 'TTWO', 'EA', 'MSFT', 'AAPL', 'GOOGL', 'META', 'AMZN', 'NFLX', 'CRM', 'NOW',
 'ADBE', 'ORCL', 'IBM', 'CSCO', 'PYPL', 'V', 'MA', 'JPM', 'BAC', 'GS',
@@ -28,393 +31,249 @@ const DEFAULT_TICKERS = [
 'CGC', 'ACB', 'SNDL', 'VRTX', 'REGN', 'MRNA', 'BNTX', 'LLY', 'NVO', 'PFE',
 'JNJ', 'UNH', 'ELV', 'HUM', 'CVS', 'CI', 'ALGN', 'ISRG', 'DXCM', 'PODD',
 'AXON', 'TTMI', 'VRT', 'MOD', 'PWR', 'ETN', 'VST', 'CEG', 'NRG', 'TLN',
-'ABEV.TO', 'TD.TO', 'RY.TO', 'ENB.TO', 'CNQ.TO', 'SU.TO', 'CVE.TO', 'ARX.TO', 'TOU.TO', 'IMO.TO',
+'ABEV.TO', 'TD.TO', 'RY.TO', 'ENB.TO', 'CNQ.TO', 'SU.TO', 'CVE.TO', 'ARX.TO', 'TOU.TO', 'PPL.TO',
 'BNS.TO', 'BMO.TO', 'CM.TO', 'MFC.TO', 'SLF.TO', 'GWO.TO', 'POW.TO', 'BAM.TO', 'BN.TO', 'ATD.TO',
-'DOL.TO', 'WSP.TO', 'QSR.TO', 'TRI.TO', 'CP.TO', 'CNR.TO', 'T.TO', 'BCE.TO', 'RCI-B.TO', 'ENB',
-'CNQ', 'SU', 'SHOP', 'RY', 'TD', 'BAM', 'BN', 'BHP', 'RIO', 'VALE',
-'SQM', 'TECK-B.TO', 'FM.TO', 'CS.TO', 'HBM.TO', 'LUN.TO', 'IVN.TO', 'K.TO', 'AEM.TO', 'ABX.TO',
-'GOLD', 'NEM', 'WPM', 'FNV', 'AGI.TO', 'ELD.TO', 'BTO.TO', 'OR.TO', 'PAAS', 'AG',
-'HL', 'CDE', 'EXK', 'MAG', 'SVM', 'BTG', 'EGO', 'IAG.TO', 'NGD.TO', 'OGC.TO'
-].slice(0, 280);
-
-const CACHE_TTL_MS = 20_000;
-const BATCH_SIZE = 50;
-
-let scannerCache = {
-timestamp: 0,
-key: '',
-data: null,
-};
+'DOL.TO', 'WSP.TO', 'QSR.TO', 'TRI.TO', 'CP.TO', 'CNR.TO', 'T.TO', 'BCE.TO', 'RCI-B.TO', 'HNU.TO'
+];
 
 function getSessionPhase(now = new Date()) {
-try {
-const parts = new Intl.DateTimeFormat('en-US', {
-timeZone: 'America/New_York',
-weekday: 'short',
-hour: '2-digit',
-minute: '2-digit',
-hour12: false,
-}).formatToParts(now);
+const etString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+const et = new Date(etString);
+const day = et.getDay();
+const minutes = et.getHours() * 60 + et.getMinutes();
 
-const weekday = parts.find((p) => p.type === 'weekday')?.value || '';
-const hh = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
-const mm = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-
-if (weekday === 'Sat' || weekday === 'Sun') {
-return 'POST_CLOSE';
+if (day === 0 || day === 6) {
+return { phase: 'POST_CLOSE', daytimeActive: false };
 }
-const mins = hh * 60 + mm;
-if (mins < 570) return 'PRE_BELL';
-if (mins >= 575 && mins <= 600) return 'BELL_935_WINDOW';
-if (mins > 570 && mins <= 960) return 'DAY_SESSION';
-return 'POST_CLOSE';
-} catch {
-return 'POST_CLOSE';
+if (minutes >= 575 && minutes < 615) {
+return { phase: 'BELL_935_WINDOW', daytimeActive: true };
 }
+if (minutes >= 615 && minutes < 960) {
+return { phase: 'DAY_SESSION', daytimeActive: true };
+}
+if (minutes >= 240 && minutes < 575) {
+return { phase: 'PRE_BELL', daytimeActive: false };
+}
+return { phase: 'POST_CLOSE', daytimeActive: false };
 }
 
-function isRegularDaytime(phase) {
-return phase === 'BELL_935_WINDOW' || phase === 'DAY_SESSION';
+function computeRelVol(validBars, meta) {
+const nonZeroVols = validBars
+.map((b) => b.volume)
+.filter((v) => typeof v === 'number' && v > 0);
+
+if (nonZeroVols.length >= 4) {
+const latestVol = nonZeroVols[nonZeroVols.length - 1];
+const baselineSlice = nonZeroVols.slice(-16, -1);
+const avgBaseline =
+baselineSlice.reduce((sum, v) => sum + v, 0) / baselineSlice.length;
+if (avgBaseline > 0) {
+return Number((latestVol / avgBaseline).toFixed(2));
+}
 }
 
-function calcMultiDayRangePct(quotes5d30m = []) {
-if (!Array.isArray(quotes5d30m) || quotes5d30m.length < 4) return null;
-const valid = quotes5d30m.filter(
-(q) =>
-q &&
-typeof q.high === 'number' &&
-Number.isFinite(q.high) &&
-typeof q.low === 'number' &&
-Number.isFinite(q.low) &&
-q.high > 0 &&
-q.low > 0
+const regVol = Number(meta?.regularMarketVolume || 0);
+const avgDailyVol = Number(
+meta?.averageDailyVolume10Day || meta?.averageDailyVolume3Month || 0
 );
-if (valid.length < 4) return null;
-const highest = Math.max(...valid.map((q) => q.high));
-const lowest = Math.min(...valid.map((q) => q.low));
-if (!lowest || lowest <= 0) return null;
-return Number((((highest - lowest) / lowest) * 100).toFixed(2));
+if (regVol > 0 && avgDailyVol > 0) {
+return Number((regVol / avgDailyVol).toFixed(2));
 }
 
-async function fetchSingleChart(symbol, sessionPhase) {
-const daytimeActive = isRegularDaytime(sessionPhase);
+return 0;
+}
+
+async function fetchSingleChart(symbol, daytimeActive) {
 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
 symbol
 )}?interval=30m&range=5d&includePrePost=false`;
 
 try {
-const controller = new AbortController();
-const timer = setTimeout(() => controller.abort(), 5000);
-
 const res = await fetch(url, {
-headers: { 'User-Agent': 'Mozilla/5.0' },
-cache: 'no-store',
-signal: controller.signal,
-}).finally(() => clearTimeout(timer));
-
-if (!res.ok) {
-return {
-symbol,
-isFallback: true,
-setup: 'WATCH',
-actionCall: 'SKIP / WATCH',
-profitVerdict: 'NO DATA',
-coilScore: 0,
-setupGrade: '-',
-};
-}
+headers: {
+'User-Agent': 'Mozilla/5.0'
+},
+cache: 'no-store'
+});
+if (!res.ok) return null;
 
 const json = await res.json();
 const result = json?.chart?.result?.[0];
-const meta = result?.meta;
-const quote = result?.indicators?.quote?.[0];
+if (!result) return null;
 
-const rawCloses = Array.isArray(quote?.close) ? quote.close : [];
-const rawHighs = Array.isArray(quote?.high) ? quote.high : [];
-const rawLows = Array.isArray(quote?.low) ? quote.low : [];
-const rawVols = Array.isArray(quote?.volume) ? quote.volume : [];
+const meta = result.meta || {};
+const quote = result.indicators?.quote?.[0] || {};
+const timestamps = result.timestamp || [];
 
-if (!meta || rawCloses.length === 0) {
-return {
-symbol,
-isFallback: true,
-setup: 'WATCH',
-actionCall: 'SKIP / WATCH',
-profitVerdict: 'NO DATA',
-coilScore: 0,
-setupGrade: '-',
-};
+const validBars = [];
+for (let i = 0; i < timestamps.length; i++) {
+const c = quote.close?.[i];
+const h = quote.high?.[i];
+const l = quote.low?.[i];
+const o = quote.open?.[i];
+const v = quote.volume?.[i];
+if (typeof c === 'number' && typeof h === 'number' && typeof l === 'number') {
+validBars.push({
+open: typeof o === 'number' ? o : c,
+high: h,
+low: l,
+close: c,
+volume: typeof v === 'number' ? v : 0
+});
+}
 }
 
-const closes = rawCloses.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
-const highs = rawHighs.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
-const lows = rawLows.filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
-const vols = rawVols.filter((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0);
+if (validBars.length < 3) return null;
 
-const rawPrice =
-typeof meta.regularMarketPrice === 'number' &&
-Number.isFinite(meta.regularMarketPrice) &&
-meta.regularMarketPrice > 0
-? meta.regularMarketPrice
-: closes[closes.length - 1] || 0;
+const latestBar = validBars[validBars.length - 1];
+const price = Number((meta.regularMarketPrice ?? latestBar.close).toFixed(2));
+const prevClose = Number(
+(meta.chartPreviousClose ?? meta.previousClose ?? validBars[0].open).toFixed(2)
+);
+if (!price || !prevClose) return null;
 
-const prevClose =
-typeof meta.previousClose === 'number' &&
-Number.isFinite(meta.previousClose) &&
-meta.previousClose > 0
-? meta.previousClose
-: typeof meta.chartPreviousClose === 'number' &&
-Number.isFinite(meta.chartPreviousClose) &&
-meta.chartPreviousClose > 0
-? meta.chartPreviousClose
-: rawPrice;
+const changePercent = Number((((price - prevClose) / prevClose) * 100).toFixed(2));
+const dailyVolume = Number(
+meta.regularMarketVolume ||
+validBars.slice(-13).reduce((sum, b) => sum + (b.volume || 0), 0)
+);
 
-if (!rawPrice || rawPrice <= 0) {
-return {
-symbol,
-isFallback: true,
-setup: 'WATCH',
-actionCall: 'SKIP / WATCH',
-profitVerdict: 'NO DATA',
-coilScore: 0,
-setupGrade: '-',
-};
-}
-
-const changePercent =
-prevClose > 0 ? Number((((rawPrice - prevClose) / prevClose) * 100).toFixed(2)) : 0;
-
-const recentSliceLen = Math.min(6, closes.length);
-const recentHighs = highs.slice(-recentSliceLen);
-const recentLows = lows.slice(-recentSliceLen);
-const recentHigh = recentHighs.length ? Math.max(...recentHighs) : rawPrice;
-const recentLow = recentLows.length ? Math.min(...recentLows) : rawPrice * 0.99;
-
+const recent3 = validBars.slice(-4, -1);
+const coilSource = recent3.length >= 2 ? recent3 : validBars.slice(-3);
+const coilHigh = Math.max(...coilSource.map((b) => b.high));
+const coilLow = Math.min(...coilSource.map((b) => b.low));
 const rangePct =
-recentLow > 0 ? Number((((recentHigh - recentLow) / recentLow) * 100).toFixed(2)) : 0;
+coilLow > 0 ? Number((((coilHigh - coilLow) / coilLow) * 100).toFixed(2)) : 99;
 
-const avgVol =
-vols.length > 1
-? vols.slice(0, -1).reduce((acc, v) => acc + v, 0) / Math.max(1, vols.length - 1)
-: 0;
-const lastVol = vols.length ? vols[vols.length - 1] : 0;
-const relVol = avgVol > 0 ? Number((lastVol / avgVol).toFixed(2)) : 1.0;
+const multiBars = validBars.slice(-12, -1);
+const multiHigh = multiBars.length ? Math.max(...multiBars.map((b) => b.high)) : coilHigh;
+const multiLow = multiBars.length ? Math.min(...multiBars.map((b) => b.low)) : coilLow;
+const multiDayRangePct =
+multiLow > 0
+? Number((((multiHigh - multiLow) / multiLow) * 100).toFixed(2))
+: null;
 
-const maxLen = Math.max(rawHighs.length, rawLows.length);
-const bars5d = [];
-for (let i = 0; i < maxLen; i += 1) {
-bars5d.push({ high: rawHighs[i], low: rawLows[i] });
-}
-const multiDayRangePct = calcMultiDayRangePct(bars5d);
+const relVol = computeRelVol(validBars, meta);
 
-const isFallback = false;
-const withinActiveCap = changePercent >= 0 && changePercent <= 3.0;
+const isTightCoil = rangePct <= 1.15;
+const isMultiTight = multiDayRangePct !== null && multiDayRangePct <= 3.4;
+const inStandardPopBand = changePercent >= 1.0 && changePercent <= 2.75;
+const inMultiPopBand = changePercent >= 1.0 && changePercent <= 3.25;
 
-const standardCoilPop =
-!isFallback &&
-daytimeActive &&
-withinActiveCap &&
-changePercent >= 1.0 &&
-changePercent <= 2.75 &&
-rangePct <= 1.05 &&
-relVol >= 1.3;
-
+const isCoilPop =
+daytimeActive && isTightCoil && inStandardPopBand && relVol >= 1.25;
 const isMultiCoil =
-!isFallback &&
-daytimeActive &&
-withinActiveCap &&
-typeof multiDayRangePct === 'number' &&
-multiDayRangePct <= 3.2 &&
-changePercent >= 1.0 &&
-changePercent <= 3.25 &&
-relVol >= 1.15;
+daytimeActive && !isCoilPop && isMultiTight && inMultiPopBand && relVol >= 1.15;
+const isCoiling = (isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
 
-const isCoilPop = standardCoilPop || isMultiCoil;
-const isCoiling = !isFallback && withinActiveCap && rangePct <= 1.05;
+let setup = 'WATCH';
+if (isCoilPop) setup = 'COIL POP';
+else if (isMultiCoil) setup = 'MULTI-COIL';
+else if (isCoiling) setup = 'COILING';
 
-const setup = isMultiCoil
-? 'MULTI-COIL'
-: isCoilPop
-? 'COIL POP'
-: isCoiling
-? 'COILING'
-: 'WATCH';
+const rawStop = Math.min(coilLow * 0.994, price * 0.985);
+const floorStop = price * 0.982;
+const stopPrice = Number(Math.max(rawStop, floorStop).toFixed(2));
+const trimPrice = Number((price * 1.0325).toFixed(2));
+const target5Price = Number((price * 1.05).toFixed(2));
 
-const stopCandidate = recentLow > 0 ? recentLow * 0.994 : rawPrice * 0.985;
-const maxRiskFloor = rawPrice * 0.982;
-const stopPrice = Number(Math.max(stopCandidate, maxRiskFloor).toFixed(2));
-const trimPrice = Number((rawPrice * 1.0325).toFixed(2));
-const target5Pct = Number((rawPrice * 1.05).toFixed(2));
+const downsideRiskPct = Number(
+Math.max(((price - stopPrice) / price) * 100, 0.4).toFixed(2)
+);
+const upsideTo5Pct = 5.0;
+const rrRatio = Number((upsideTo5Pct / downsideRiskPct).toFixed(2));
 
-const downsideRiskPct =
-rawPrice > 0 && stopPrice < rawPrice
-? Number((((rawPrice - stopPrice) / rawPrice) * 100).toFixed(2))
-: 1.5;
-
-const upsideTo5Pct =
-rawPrice > 0 && target5Pct > rawPrice
-? Number((((target5Pct - rawPrice) / rawPrice) * 100).toFixed(2))
-: 5.0;
-
-const rrRatio =
-downsideRiskPct > 0 ? Number((upsideTo5Pct / downsideRiskPct).toFixed(2)) : 1.0;
-
-const rawRisk =
-25 +
-Math.min(25, Math.max(0, rangePct * 18)) +
-(typeof multiDayRangePct === 'number' ? Math.min(15, multiDayRangePct * 4) : 6) +
-(relVol < 1.15 ? 14 : relVol < 1.3 ? 6 : 0) +
-Math.min(20, Math.max(0, Math.abs(changePercent) * 4.5));
-
-const riskScore = Number(Math.min(99, Math.max(10, rawRisk)).toFixed(0));
-const riskLevel = riskScore >= 70 ? 'HIGH RISK' : riskScore >= 45 ? 'MOD RISK' : 'LOW RISK';
+const volatilityPenalty = Math.min(45, Math.round(rangePct * 14));
+const pricePenalty = price < 3 ? 25 : price < 10 ? 10 : 0;
+const riskScore = Math.min(99, Math.max(25, 35 + volatilityPenalty + pricePenalty));
 
 let coilScore = 0;
-if (isMultiCoil) {
-const baseRange = typeof multiDayRangePct === 'number' ? multiDayRangePct : rangePct;
-const multiTightnessPts = Math.max(0, Math.min(35, (3.2 - baseRange) * 14));
-const multiVolumePts = Math.max(0, Math.min(35, (relVol - 1.0) * 26));
-const popPts = changePercent >= 1.0 && changePercent <= 3.25 ? 18 : 8;
-const rrPts = Math.max(0, Math.min(12, rrRatio * 4));
-coilScore = Math.round(multiTightnessPts + multiVolumePts + popPts + rrPts);
-} else if (standardCoilPop) {
-const tightnessPts = Math.max(0, Math.min(35, (1.05 - rangePct) * 45));
-const volumePts = Math.max(0, Math.min(35, (relVol - 1.0) * 28));
-const sweetSpotPts =
-changePercent >= 1.2 && changePercent <= 2.4 ? 18 : changePercent > 0 ? 10 : 0;
-const rrPts = Math.max(0, Math.min(12, rrRatio * 4));
-coilScore = Math.round(tightnessPts + volumePts + sweetSpotPts + rrPts);
+let setupGrade = '-';
+if (isCoilPop || isMultiCoil) {
+const volPts = Math.min(40, Math.round(relVol * 18));
+const tightPts = Math.max(10, Math.round((1.5 - Math.min(rangePct, 1.5)) * 25));
+const rrPts = Math.min(25, Math.round(rrRatio * 3));
+coilScore = Math.min(99, volPts + tightPts + rrPts);
+setupGrade =
+coilScore >= 85 ? 'A+' : coilScore >= 72 ? 'A' : coilScore >= 60 ? 'B' : 'C';
 }
 
-const setupGrade =
-coilScore >= 75 ? 'A+' : coilScore >= 55 ? 'A' : coilScore > 0 ? 'B' : '-';
-
-const actionCall = !daytimeActive
-? 'WAIT (DAYTIME ONLY)'
-: isCoilPop
-? 'BUY / ENTER'
-: isCoiling
-? 'WATCH COIL'
-: 'SKIP / WATCH';
-
-const profitVerdict = !daytimeActive
-? 'WAIT FOR DAYTIME'
-: isCoilPop && rrRatio >= 2.0 && riskScore < 75
-? 'FAVORABLE BUY'
-: isCoilPop && riskScore >= 75
-? 'HIGH-RISK BUY'
-: changePercent >= 4.5
-? 'TAKE / TRAIL PROFIT'
-: changePercent >= 3.0
-? 'TRIM / WATCH EXIT'
-: 'HOLD / WAIT';
+let profitVerdict = 'HOLD / WAIT';
+if (!daytimeActive) {
+profitVerdict = 'WAIT FOR DAYTIME';
+} else if (changePercent > 3.25) {
+profitVerdict = 'TRIM / WATCH EXIT';
+} else if (isCoilPop || isMultiCoil) {
+profitVerdict = 'ACTIVE ENTRY';
+}
 
 return {
-symbol,
-price: Number(rawPrice.toFixed(2)),
+symbol: symbol.toUpperCase(),
+market: symbol.toUpperCase().endsWith('.TO') ? 'CA' : 'US',
+currency: symbol.toUpperCase().endsWith('.TO') ? 'CAD' : 'USD',
+price,
 changePercent,
+dailyVolume,
 rangePct,
 multiDayRangePct,
 relVol,
-isFallback,
 isCoilPop,
 isMultiCoil,
 isCoiling,
 setup,
-entryPrice: Number(rawPrice.toFixed(2)),
+entryPrice: price,
 stopPrice,
 trimPrice,
-target5Pct,
+target5Price,
 downsideRiskPct,
 upsideTo5Pct,
 rrRatio,
 riskScore,
-riskLevel,
 coilScore,
 setupGrade,
-actionCall,
-profitVerdict,
-market: symbol.endsWith('.TO') ? 'CA (.TO)' : 'US (USD)',
+profitVerdict
 };
 } catch {
-return {
-symbol,
-isFallback: true,
-setup: 'WATCH',
-actionCall: 'SKIP / WATCH',
-profitVerdict: 'ERROR',
-coilScore: 0,
-setupGrade: '-',
-};
+return null;
 }
 }
 
 export async function GET(request) {
-try {
 const { searchParams } = new URL(request.url);
-const customParam = searchParams.get('symbols');
-const tickers = customParam
-? customParam
+const customParam = searchParams.get('tickers') || '';
+const customTickers = customParam
 .split(',')
-.map((s) => s.trim().toUpperCase())
-.filter(Boolean)
-.slice(0, 280)
-: DEFAULT_TICKERS;
+.map((t) => t.trim().toUpperCase())
+.filter(Boolean);
 
-const sessionPhase = getSessionPhase();
-const cacheKey = `${sessionPhase}:${tickers.join(',')}`;
-const now = Date.now();
+const uniqueSymbols = Array.from(new Set([...customTickers, ...DEFAULT_TICKERS]));
+const session = getSessionPhase();
 
-if (
-scannerCache.data &&
-scannerCache.key === cacheKey &&
-now - scannerCache.timestamp < CACHE_TTL_MS
-) {
-return NextResponse.json(scannerCache.data);
-}
-
+const batchSize = 25;
 const rows = [];
-for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
-const chunk = tickers.slice(i, i + BATCH_SIZE);
-const chunkResults = await Promise.all(
-chunk.map((sym) => fetchSingleChart(sym, sessionPhase))
+for (let i = 0; i < uniqueSymbols.length; i += batchSize) {
+const batch = uniqueSymbols.slice(i, i + batchSize);
+const results = await Promise.all(
+batch.map((sym) => fetchSingleChart(sym, session.daytimeActive))
 );
-rows.push(...chunkResults);
+rows.push(...results.filter(Boolean));
 }
 
-const validRows = rows.filter((r) => !r.isFallback);
-
-const rankedRows = [...validRows].sort((a, b) => {
-if (a.isCoilPop !== b.isCoilPop) return a.isCoilPop ? -1 : 1;
+rows.sort((a, b) => {
+const aActive = a.isCoilPop || a.isMultiCoil ? 1 : 0;
+const bActive = b.isCoilPop || b.isMultiCoil ? 1 : 0;
+if (bActive !== aActive) return bActive - aActive;
 if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
-return b.rrRatio - a.rrRatio;
+if (b.rrRatio !== a.rrRatio) return b.rrRatio - a.rrRatio;
+return b.relVol - a.relVol;
 });
 
-const payload = {
-sessionPhase,
-daytimeActive: isRegularDaytime(sessionPhase),
-totalScanned: tickers.length,
-activeCount: validRows.length,
-topCoilSetups: rankedRows.filter((r) => r.isCoilPop).slice(0, 10),
-rows: rankedRows,
+return NextResponse.json({
+sessionPhase: session.phase,
+daytimeActive: session.daytimeActive,
+totalScanned: uniqueSymbols.length,
+totalReturned: rows.length,
 updatedAt: new Date().toISOString(),
-};
-
-scannerCache = {
-timestamp: now,
-key: cacheKey,
-data: payload,
-};
-
-return NextResponse.json(payload);
-} catch (err) {
-return NextResponse.json(
-{
-error: err instanceof Error ? err.message : 'Scanner route failed',
-rows: [],
-topCoilSetups: [],
-},
-{ status: 500 }
-);
-}
+rows
+});
 }
