@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 
 const DEFAULT_TICKERS = [
@@ -139,7 +138,8 @@ if (!rawPrice || !rawPrevClose) return null;
 const rawChangePct = ((rawPrice - rawPrevClose) / rawPrevClose) * 100;
 if (Math.abs(rawChangePct) > 250) return null;
 
-const price = Number(rawPrice.toFixed(rawPrice < 1 ? 4 : 2));
+const decimals = rawPrice < 1 ? 4 : 2;
+const price = Number(rawPrice.toFixed(decimals));
 const changePercent = Number(rawChangePct.toFixed(2));
 const absChangePercent = Number(Math.abs(changePercent).toFixed(2));
 const pctToFiveTarget = Number((5.0 - changePercent).toFixed(2));
@@ -159,7 +159,7 @@ coilLow > 0 ? Number((((coilHigh - coilLow) / coilLow) * 100).toFixed(2)) : 99;
 
 const distToCoilHighPct =
 coilHigh > 0 ? Number((((coilHigh - rawPrice) / coilHigh) * 100).toFixed(2)) : 99;
-const brokeCoilHigh = rawPrice > coilHigh && changePercent >= 0.4 && changePercent <= 3.25;
+const brokeCoilHigh = rawPrice > coilHigh && changePercent >= 0.25 && changePercent <= 3.25;
 const pressingCoilTop =
 !brokeCoilHigh &&
 distToCoilHighPct <= 0.45 &&
@@ -176,10 +176,18 @@ multiLow > 0
 
 const relVol = computeRelVol(validBars, meta);
 const risingVol = hasRisingVolumeTrend(validBars);
+const volStir = relVol >= 0.65 || (risingVol && relVol >= 0.45);
 
 const isTightCoil = rangePct <= 1.35;
 const isMultiTight = multiDayRangePct !== null && multiDayRangePct <= 3.6;
-const inEarlyPopBand = changePercent >= 0.4 && changePercent <= 3.25;
+const inEarlyStartBand = changePercent >= 0.25 && changePercent <= 2.25;
+const inEarlyPopBand = changePercent >= 0.25 && changePercent <= 3.25;
+
+const earlyStart =
+daytimeActive &&
+inEarlyStartBand &&
+(isTightCoil || isMultiTight) &&
+(brokeCoilHigh || pressingCoilTop || volStir);
 
 const isCoilPop =
 daytimeActive && isTightCoil && inEarlyPopBand && (relVol >= 0.85 || brokeCoilHigh);
@@ -188,7 +196,7 @@ daytimeActive && !isCoilPop && isMultiTight && inEarlyPopBand && relVol >= 0.8;
 const isPreJump =
 (isTightCoil || isMultiTight) &&
 (pressingCoilTop || brokeCoilHigh) &&
-relVol >= 0.65;
+volStir;
 const isCoiling =
 (isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
 
@@ -196,15 +204,13 @@ const isReadyUp =
 !isStretched &&
 changePercent >= -0.25 &&
 changePercent <= 3.5 &&
-relVol >= 0.75 &&
-(brokeCoilHigh ||
-isCoilPop ||
-isMultiCoil ||
-isPreJump ||
-(changePercent >= 0.25 && isTightCoil));
+(relVol >= 0.75 || earlyStart) &&
+(earlyStart || brokeCoilHigh || isCoilPop || isMultiCoil || isPreJump);
 
 let setup = 'WATCH';
-if (isReadyUp && brokeCoilHigh) setup = 'READY UP • BROKE COIL';
+if (earlyStart && brokeCoilHigh) setup = 'EARLY START • BROKE COIL';
+else if (earlyStart) setup = 'EARLY START • COIL STIR';
+else if (isReadyUp && brokeCoilHigh) setup = 'READY UP • BROKE COIL';
 else if (isReadyUp && (isCoilPop || isMultiCoil)) setup = 'READY UP • IGNITE';
 else if (isReadyUp && isPreJump) setup = 'READY UP • COIL TOP';
 else if (isReadyUp) setup = 'READY UP';
@@ -212,7 +218,6 @@ else if (isPreJump) setup = 'PRE-JUMP';
 else if (isCoiling) setup = 'COILING';
 else if (isStretched) setup = 'STRETCHED';
 
-const decimals = rawPrice < 1 ? 4 : 2;
 const rawStop = Math.min(coilLow * 0.994, rawPrice * 0.985);
 const floorStop = rawPrice * 0.982;
 const stopPrice = Number(Math.max(rawStop, floorStop).toFixed(decimals));
@@ -249,6 +254,8 @@ if (!daytimeActive) {
 profitVerdict = 'WAIT FOR DAYTIME';
 } else if (isStretched) {
 profitVerdict = 'SKIP CHASE (>5%)';
+} else if (earlyStart) {
+profitVerdict = 'CATCH EARLY (+5% RUNWAY)';
 } else if (brokeCoilHigh && isReadyUp) {
 profitVerdict = 'BREAKOUT +5% WATCH';
 } else if (isReadyUp) {
@@ -256,6 +263,10 @@ profitVerdict = 'EARLY +5% WATCH';
 } else if (changePercent < 0) {
 profitVerdict = 'RED / AVOID';
 }
+
+const actionPlan = isStretched
+? `Already >+5% (${changePercent}%): skip chase; wait for pullback/reset.`
+: `Early entry around ${price} (stop ${stopPrice}) -> trim near ${trimPrice} (+3.25%) -> target ${target5Price} (+5%).`;
 
 return {
 symbol: symbol.toUpperCase(),
@@ -269,6 +280,8 @@ distToCoilHighPct,
 brokeCoilHigh,
 pressingCoilTop,
 risingVol,
+volStir,
+earlyStart,
 isStretched,
 isPreJump,
 isReadyUp,
@@ -290,7 +303,8 @@ rrRatio,
 riskScore,
 coilScore,
 setupGrade,
-profitVerdict
+profitVerdict,
+actionPlan
 };
 } catch {
 return null;
@@ -319,7 +333,9 @@ rows.push(...results.filter(Boolean));
 }
 
 rows.sort((a, b) => {
-const aRank = a.brokeCoilHigh
+const aRank = a.earlyStart
+? 6
+: a.brokeCoilHigh
 ? 5
 : a.isReadyUp
 ? 4
@@ -330,7 +346,9 @@ const aRank = a.brokeCoilHigh
 : a.isStretched
 ? 0
 : 1;
-const bRank = b.brokeCoilHigh
+const bRank = b.earlyStart
+? 6
+: b.brokeCoilHigh
 ? 5
 : b.isReadyUp
 ? 4
