@@ -80,6 +80,15 @@ return Number((regVol / avgDailyVol).toFixed(2));
 return 0;
 }
 
+function hasRisingVolumeTrend(validBars) {
+const vols = validBars
+.slice(-3)
+.map((b) => b.volume)
+.filter((v) => typeof v === 'number' && v > 0);
+if (vols.length < 3) return false;
+return vols[2] > vols[1] && vols[1] >= vols[0] * 0.85;
+}
+
 async function fetchSingleChart(symbol, daytimeActive) {
 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
 symbol
@@ -148,10 +157,14 @@ const coilLow = Math.min(...coilSource.map((b) => b.low));
 const rangePct =
 coilLow > 0 ? Number((((coilHigh - coilLow) / coilLow) * 100).toFixed(2)) : 99;
 
-// How close price is to breaking above the recent coil ceiling
 const distToCoilHighPct =
 coilHigh > 0 ? Number((((coilHigh - rawPrice) / coilHigh) * 100).toFixed(2)) : 99;
-const pressingCoilTop = distToCoilHighPct <= 0.45 && changePercent >= -0.25 && changePercent <= 3.5;
+const brokeCoilHigh = rawPrice > coilHigh && changePercent >= 0.4 && changePercent <= 3.25;
+const pressingCoilTop =
+!brokeCoilHigh &&
+distToCoilHighPct <= 0.45 &&
+changePercent >= -0.25 &&
+changePercent <= 3.5;
 
 const multiBars = validBars.slice(-12, -1);
 const multiHigh = multiBars.length ? Math.max(...multiBars.map((b) => b.high)) : coilHigh;
@@ -162,31 +175,37 @@ multiLow > 0
 : null;
 
 const relVol = computeRelVol(validBars, meta);
+const risingVol = hasRisingVolumeTrend(validBars);
 
 const isTightCoil = rangePct <= 1.35;
 const isMultiTight = multiDayRangePct !== null && multiDayRangePct <= 3.6;
 const inEarlyPopBand = changePercent >= 0.4 && changePercent <= 3.25;
 
 const isCoilPop =
-daytimeActive && isTightCoil && inEarlyPopBand && relVol >= 0.85;
+daytimeActive && isTightCoil && inEarlyPopBand && (relVol >= 0.85 || brokeCoilHigh);
 const isMultiCoil =
 daytimeActive && !isCoilPop && isMultiTight && inEarlyPopBand && relVol >= 0.8;
 const isPreJump =
 (isTightCoil || isMultiTight) &&
-pressingCoilTop &&
+(pressingCoilTop || brokeCoilHigh) &&
 relVol >= 0.65;
-const isCoiling = (isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
+const isCoiling =
+(isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
 
-// Ready Up: early move or coil ceiling press with volume & runway toward +5%
 const isReadyUp =
 !isStretched &&
 changePercent >= -0.25 &&
 changePercent <= 3.5 &&
 relVol >= 0.75 &&
-(isCoilPop || isMultiCoil || isPreJump || (changePercent >= 0.25 && isTightCoil));
+(brokeCoilHigh ||
+isCoilPop ||
+isMultiCoil ||
+isPreJump ||
+(changePercent >= 0.25 && isTightCoil));
 
 let setup = 'WATCH';
-if (isReadyUp && (isCoilPop || isMultiCoil)) setup = 'READY UP • IGNITE';
+if (isReadyUp && brokeCoilHigh) setup = 'READY UP • BROKE COIL';
+else if (isReadyUp && (isCoilPop || isMultiCoil)) setup = 'READY UP • IGNITE';
 else if (isReadyUp && isPreJump) setup = 'READY UP • COIL TOP';
 else if (isReadyUp) setup = 'READY UP';
 else if (isPreJump) setup = 'PRE-JUMP';
@@ -213,10 +232,13 @@ const riskScore = Math.min(99, Math.max(25, 35 + volatilityPenalty + pricePenalt
 let coilScore = 0;
 let setupGrade = '-';
 if (isReadyUp || isPreJump || isCoiling) {
-const compressionPts = Math.min(35, Math.round(Math.max(0, 1.5 - Math.min(rangePct, 1.5)) * 24));
-const volPts = Math.min(35, Math.round(relVol * 16));
-const ceilingPts = pressingCoilTop ? 18 : 8;
-const runwayPts = Math.min(12, Math.round(Math.max(0, pctToFiveTarget) * 2.5));
+const compressionPts = Math.min(
+30,
+Math.round(Math.max(0, 1.5 - Math.min(rangePct, 1.5)) * 20)
+);
+const volPts = Math.min(30, Math.round(relVol * 15) + (risingVol ? 6 : 0));
+const ceilingPts = brokeCoilHigh ? 24 : pressingCoilTop ? 16 : 6;
+const runwayPts = Math.min(16, Math.round(Math.max(0, pctToFiveTarget) * 3.2));
 coilScore = Math.min(99, compressionPts + volPts + ceilingPts + runwayPts);
 setupGrade =
 coilScore >= 85 ? 'A+' : coilScore >= 72 ? 'A' : coilScore >= 60 ? 'B' : 'C';
@@ -227,6 +249,8 @@ if (!daytimeActive) {
 profitVerdict = 'WAIT FOR DAYTIME';
 } else if (isStretched) {
 profitVerdict = 'SKIP CHASE (>5%)';
+} else if (brokeCoilHigh && isReadyUp) {
+profitVerdict = 'BREAKOUT +5% WATCH';
 } else if (isReadyUp) {
 profitVerdict = 'EARLY +5% WATCH';
 } else if (changePercent < 0) {
@@ -242,7 +266,9 @@ changePercent,
 absChangePercent,
 pctToFiveTarget,
 distToCoilHighPct,
+brokeCoilHigh,
 pressingCoilTop,
+risingVol,
 isStretched,
 isPreJump,
 isReadyUp,
@@ -293,8 +319,28 @@ rows.push(...results.filter(Boolean));
 }
 
 rows.sort((a, b) => {
-const aRank = a.isReadyUp ? 4 : a.isPreJump ? 3 : a.changePercent > 0 && !a.isStretched ? 2 : a.isStretched ? 0 : 1;
-const bRank = b.isReadyUp ? 4 : b.isPreJump ? 3 : b.changePercent > 0 && !b.isStretched ? 2 : b.isStretched ? 0 : 1;
+const aRank = a.brokeCoilHigh
+? 5
+: a.isReadyUp
+? 4
+: a.isPreJump
+? 3
+: a.changePercent > 0 && !a.isStretched
+? 2
+: a.isStretched
+? 0
+: 1;
+const bRank = b.brokeCoilHigh
+? 5
+: b.isReadyUp
+? 4
+: b.isPreJump
+? 3
+: b.changePercent > 0 && !b.isStretched
+? 2
+: b.isStretched
+? 0
+: 1;
 if (bRank !== aRank) return bRank - aRank;
 if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
 if (b.relVol !== a.relVol) return b.relVol - a.relVol;
