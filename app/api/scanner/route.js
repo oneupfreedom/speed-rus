@@ -1,7 +1,3 @@
-Rudranth McDowall <oneupfreedom@gmail.com>
-1:01 PM (0 minutes ago)
-to me
-
 import { NextResponse } from 'next/server';
 
 const DEFAULT_TICKERS = [
