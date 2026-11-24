@@ -128,13 +128,12 @@ const rawPrevClose = meta.chartPreviousClose ?? meta.previousClose ?? validBars[
 if (!rawPrice || !rawPrevClose) return null;
 
 const rawChangePct = ((rawPrice - rawPrevClose) / rawPrevClose) * 100;
-if (Math.abs(rawChangePct) > 250) return null; // Filter split/adjustment glitches
+if (Math.abs(rawChangePct) > 250) return null;
 
 const price = Number(rawPrice.toFixed(rawPrice < 1 ? 4 : 2));
 const changePercent = Number(rawChangePct.toFixed(2));
 const absChangePercent = Number(Math.abs(changePercent).toFixed(2));
 const pctToFiveTarget = Number((5.0 - changePercent).toFixed(2));
-const isEarlyIgnition = changePercent >= 0.5 && changePercent <= 3.25;
 const isStretched = changePercent > 5.0;
 
 const dailyVolume = Number(
@@ -159,15 +158,15 @@ multiLow > 0
 
 const relVol = computeRelVol(validBars, meta);
 
-const isTightCoil = rangePct <= 1.25;
-const isMultiTight = multiDayRangePct !== null && multiDayRangePct <= 3.5;
-const inStandardPopBand = changePercent >= 1.0 && changePercent <= 2.75;
-const inMultiPopBand = changePercent >= 1.0 && changePercent <= 3.25;
+const isTightCoil = rangePct <= 1.35;
+const isMultiTight = multiDayRangePct !== null && multiDayRangePct <= 3.6;
+const inStandardPopBand = changePercent >= 0.5 && changePercent <= 3.25;
+const inMultiPopBand = changePercent >= 0.5 && changePercent <= 3.5;
 
 const isCoilPop =
-daytimeActive && isTightCoil && inStandardPopBand && relVol >= 1.0;
+daytimeActive && isTightCoil && inStandardPopBand && relVol >= 0.9;
 const isMultiCoil =
-daytimeActive && !isCoilPop && isMultiTight && inMultiPopBand && relVol >= 0.9;
+daytimeActive && !isCoilPop && isMultiTight && inMultiPopBand && relVol >= 0.85;
 const isPreJump =
 (isTightCoil || isMultiTight) &&
 changePercent >= -0.25 &&
@@ -175,8 +174,18 @@ changePercent < 1.0 &&
 relVol >= 0.6;
 const isCoiling = (isTightCoil || isMultiTight) && changePercent > -0.5 && changePercent < 1.0;
 
+// Ready to go up: green or flat/coiling with volume and room left toward +5%
+const isReadyUp =
+!isStretched &&
+changePercent >= -0.25 &&
+changePercent <= 3.75 &&
+relVol >= 0.85 &&
+(isCoilPop || isMultiCoil || isPreJump || changePercent >= 0.25);
+
 let setup = 'WATCH';
-if (isCoilPop) setup = 'COIL POP';
+if (isReadyUp && (isCoilPop || isMultiCoil)) setup = 'READY UP • POP';
+else if (isReadyUp) setup = 'READY UP';
+else if (isCoilPop) setup = 'COIL POP';
 else if (isMultiCoil) setup = 'MULTI-COIL';
 else if (isPreJump) setup = 'PRE-JUMP';
 else if (isCoiling) setup = 'COILING';
@@ -201,11 +210,11 @@ const riskScore = Math.min(99, Math.max(25, 35 + volatilityPenalty + pricePenalt
 
 let coilScore = 0;
 let setupGrade = '-';
-if (isCoilPop || isMultiCoil || isPreJump) {
-const runwayPts = Math.min(40, Math.round(Math.max(0, pctToFiveTarget) * 8));
-const volPts = Math.min(35, Math.round(relVol * 20));
-const tightPts = Math.max(10, Math.round((1.5 - Math.min(rangePct, 1.5)) * 16));
-coilScore = Math.min(99, runwayPts + volPts + tightPts);
+if (isReadyUp || isCoilPop || isMultiCoil || isPreJump) {
+const upPts = Math.min(35, Math.round(Math.max(0, changePercent + 0.5) * 10));
+const volPts = Math.min(40, Math.round(relVol * 18));
+const runwayPts = Math.min(24, Math.round(Math.max(0, pctToFiveTarget) * 5));
+coilScore = Math.min(99, upPts + volPts + runwayPts);
 setupGrade =
 coilScore >= 85 ? 'A+' : coilScore >= 72 ? 'A' : coilScore >= 60 ? 'B' : 'C';
 }
@@ -215,10 +224,10 @@ if (!daytimeActive) {
 profitVerdict = 'WAIT FOR DAYTIME';
 } else if (isStretched) {
 profitVerdict = 'SKIP CHASE (>5%)';
-} else if (isCoilPop || isMultiCoil) {
-profitVerdict = 'EARLY IGNITION';
-} else if (isPreJump) {
-profitVerdict = 'PRE-BREAKOUT WATCH';
+} else if (isReadyUp) {
+profitVerdict = 'READY TO GO UP';
+} else if (changePercent < 0) {
+profitVerdict = 'RED / AVOID';
 }
 
 return {
@@ -229,9 +238,9 @@ price,
 changePercent,
 absChangePercent,
 pctToFiveTarget,
-isEarlyIgnition,
 isStretched,
 isPreJump,
+isReadyUp,
 dailyVolume,
 rangePct,
 multiDayRangePct,
@@ -278,11 +287,11 @@ batch.map((sym) => fetchSingleChart(sym, session.daytimeActive))
 rows.push(...results.filter(Boolean));
 }
 
-// Prioritize early-ignition & pre-jump setups with runway to +5% ahead of already-stretched moves
+// Put READY UP candidates first, then positive movers with volume, and push red/stretched down
 rows.sort((a, b) => {
-const aPriority = a.isCoilPop || a.isMultiCoil ? 3 : a.isPreJump ? 2 : a.isStretched ? 0 : 1;
-const bPriority = b.isCoilPop || b.isMultiCoil ? 3 : b.isPreJump ? 2 : b.isStretched ? 0 : 1;
-if (bPriority !== aPriority) return bPriority - aPriority;
+const aRank = a.isReadyUp ? 4 : a.changePercent > 0 && !a.isStretched ? 2 : a.isStretched ? 0 : 1;
+const bRank = b.isReadyUp ? 4 : b.changePercent > 0 && !b.isStretched ? 2 : b.isStretched ? 0 : 1;
+if (bRank !== aRank) return bRank - aRank;
 if (b.coilScore !== a.coilScore) return b.coilScore - a.coilScore;
 if (b.relVol !== a.relVol) return b.relVol - a.relVol;
 return b.changePercent - a.changePercent;
